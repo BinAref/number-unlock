@@ -3,6 +3,7 @@ import 'dart:io';
 import 'dart:math' as math;
 
 import 'package:flutter_test/flutter_test.dart';
+import 'package:unlock_numbers/core/boosters/booster_system.dart';
 import 'package:unlock_numbers/core/economy/economy_rules.dart';
 import 'package:unlock_numbers/core/endless/endless_director.dart';
 import 'package:unlock_numbers/core/endless/endless_run.dart';
@@ -15,11 +16,28 @@ import 'package:unlock_numbers/core/levels/star_rules.dart';
 import 'package:unlock_numbers/core/model/puzzle_definition.dart';
 import 'package:unlock_numbers/core/random/seeded_random.dart';
 import 'package:unlock_numbers/core/rules/rule_book.dart';
+import 'package:unlock_numbers/core/util/json_read.dart';
+import 'package:unlock_numbers/services/ad_gate.dart';
 import 'package:unlock_numbers/services/compute_scheduler.dart';
 import 'package:unlock_numbers/services/endless_service.dart';
+import 'package:unlock_numbers/services/monetization.dart';
 import 'package:unlock_numbers/services/player_service.dart';
 import 'package:unlock_numbers/services/save_system.dart';
 import 'package:unlock_numbers/services/storage.dart';
+
+/// An ad service that answers at once and counts how often it opened.
+class _FakeAds implements RewardedAdsService {
+  _FakeAds([this.outcome = AdOutcome.rewarded]);
+
+  final AdOutcome outcome;
+  int shown = 0;
+
+  @override
+  Future<AdOutcome> show(String placement) async {
+    shown++;
+    return outcome;
+  }
+}
 
 final RuleBook book = RuleBook.fromJson(jsonDecode(File('assets/config/rules.json').readAsStringSync()) as Map<String, Object?>);
 final DifficultyCurve endlessCurve = DifficultyCurve.fromJson(
@@ -208,6 +226,81 @@ void main() {
       final second = await serviceFor(save, [4242, 777]).startRun();
       expect(first.seed, 4242);
       expect(second.seed, 777);
+    });
+  });
+
+  group('boosters and ads', () {
+    const policy = BoosterPolicy(BoosterRules());
+
+    test('levels: three free hints at the start of every level attempt, then paid', () {
+      final board = BoosterUsage();
+      expect(policy.freeHintsLeft(mode: 'levels', board: board), 3);
+      board.freeHints = 3;
+      expect(policy.freeHintsLeft(mode: 'levels', board: board), 0);
+      expect(policy.freeHintsLeft(mode: 'levels', board: BoosterUsage()), 3, reason: 'a new attempt starts with three again');
+    });
+
+    test('endless: three free hints for the whole run, never renewed by progress', () {
+      expect(policy.freeHintsLeft(mode: 'endless', board: BoosterUsage(), runFreeHintsUsed: 1), 2);
+      expect(policy.freeHintsLeft(mode: 'endless', board: BoosterUsage(), runFreeHintsUsed: 3), 0);
+    });
+
+    test('levels: the swap is locked until paid; endless: one free swap per run; one swap per board', () {
+      expect(policy.swapReady(mode: 'levels', board: BoosterUsage()), isFalse);
+      expect(policy.swapReady(mode: 'levels', board: BoosterUsage(swapUnlocked: true)), isTrue);
+      expect(policy.swapReady(mode: 'endless', board: BoosterUsage()), isTrue);
+      expect(policy.swapReady(mode: 'endless', board: BoosterUsage(), runFreeSwapUsed: true), isFalse);
+      expect(policy.swapLeft(BoosterUsage(swapUsed: true)), isFalse);
+    });
+
+    test('economy.json carries the same allowances and the ten-second wait', () {
+      final economy = readMap(jsonDecode(File('assets/config/economy.json').readAsStringSync()));
+      final r = BoosterRules.fromJson(readMap(economy['boosters']));
+      expect(r.freeHintsIn('levels'), 3);
+      expect(r.freeHintsIn('endless'), 3);
+      expect(r.freeSwapsIn('levels'), 0);
+      expect(r.freeSwapsIn('endless'), 1);
+      expect(r.adCooldown, const Duration(seconds: 10));
+      expect(r.hintByAd && r.swapByAd && r.extraSlotByAd, isTrue);
+    });
+
+    test('free hints are help too: they cost stars', () {
+      final b = BoosterUsage(freeHints: 1);
+      expect(b.helps, 1);
+      expect(const StarRules().starsFor(won: true, helps: b.helps), 2);
+    });
+
+    test('ten seconds between any two ads; the wait survives reopening the app', () async {
+      var now = DateTime(2026, 11, 26, 12);
+      final store = MemoryStore();
+      final ads = _FakeAds();
+      final gate = AdGate(ads: ads, store: store, clock: () => now);
+      await gate.load();
+      expect(gate.ready, isTrue);
+      expect(await gate.show('hint'), AdOutcome.rewarded);
+      expect(gate.ready, isFalse);
+      now = now.add(const Duration(seconds: 3));
+      expect(gate.secondsLeft, 7);
+      expect(await gate.show('swap'), isNull, reason: 'nothing opens during the wait');
+      expect(ads.shown, 1);
+      final reopened = AdGate(ads: ads, store: store, clock: () => now);
+      await reopened.load();
+      expect(reopened.secondsLeft, 7);
+      now = now.add(const Duration(seconds: 7));
+      expect(reopened.ready, isTrue);
+      expect(await reopened.show('extra_slot'), AdOutcome.rewarded);
+      expect(ads.shown, 2);
+      gate.dispose();
+      reopened.dispose();
+    });
+
+    test('an ad closed early pays nothing but still starts the wait', () async {
+      final now = DateTime(2026, 11, 26, 12);
+      final gate = AdGate(ads: _FakeAds(AdOutcome.closedEarly), store: MemoryStore(), clock: () => now);
+      await gate.load();
+      expect(await gate.show('hint'), AdOutcome.closedEarly);
+      expect(gate.ready, isFalse);
+      gate.dispose();
     });
   });
 

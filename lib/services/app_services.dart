@@ -11,6 +11,7 @@ import '../core/generator/level_forge.dart';
 import '../core/levels/level_catalog.dart';
 import '../core/rules/rule_book.dart';
 import '../core/util/json_read.dart';
+import 'ad_gate.dart';
 import 'audio_service.dart';
 import 'compute_scheduler.dart';
 import 'endless_service.dart';
@@ -56,6 +57,7 @@ class AppServices {
     required this.audio,
     required this.haptics,
     required this.ads,
+    required this.adGate,
     required this.purchases,
     required this.levels,
     required this.endless,
@@ -93,11 +95,15 @@ class AppServices {
     final levelIndex = LevelIndex.fromJson(await json('assets/levels/index.json'));
     final endlessCurve = DifficultyCurve.fromJson(await json('assets/config/endless_curve.json'), bandsKey: 'boards');
     final scheduler = ComputeScheduler(slice: Duration(milliseconds: readInt(solver['sliceMs'], 7)));
+    final boosterRules = BoosterRules.fromJson(readMap(economyJson['boosters']));
+    final ads = MockRewardedAds(seconds: config.adSeconds);
+    final adGate = AdGate(ads: ads, store: save.store, cooldown: boosterRules.adCooldown);
+    await adGate.load();
     return AppServices._(
       config: config,
       rules: rules,
       economy: economy,
-      boosters: BoosterRules.fromJson(readMap(economyJson['boosters'])),
+      boosters: boosterRules,
       baseCapacity: readInt(economyJson['baseCapacity'], 5),
       hintBudget: readInt(solver['hintBudget'], 300000),
       rescueBudget: readInt(solver['rescueBudget'], 220000),
@@ -108,7 +114,8 @@ class AppServices {
       player: player,
       audio: audioService,
       haptics: HapticsService(enabled: settings.vibration),
-      ads: MockRewardedAds(seconds: config.adSeconds),
+      ads: ads,
+      adGate: adGate,
       purchases: MockPurchases.fromJson(await json('assets/config/store.json'), delay: Duration(milliseconds: config.purchaseDelayMs)),
       levels: LevelService(
         bundled: LevelCatalog(levelIndex, (file) => b.loadString('assets/levels/$file')),
@@ -144,6 +151,9 @@ class AppServices {
   final AudioService audio;
   final HapticsService haptics;
   final RewardedAdsService ads;
+
+  /// Every ad goes through this: one ad, then a wait before the next.
+  final AdGate adGate;
   final PurchaseService purchases;
   final LevelService levels;
 

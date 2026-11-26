@@ -27,7 +27,21 @@ Future<Payment?> _choosePayment(BuildContext context, {required String title, re
       ),
       if (adAllowed) ...[
         const SizedBox(height: 10),
-        StoneButton(label: s.i18n.t('game.payAd'), glyph: Glyph.film, onTap: () => Navigator.pop(context, Payment.ad)),
+        // Between two ads there is a wait: the button counts it down, and a
+        // tap during the wait shows the seconds left instead of an ad.
+        ListenableBuilder(
+          listenable: s.adGate,
+          builder: (context, _) {
+            final gate = s.adGate;
+            return StoneButton(
+              label: gate.ready ? s.i18n.t('game.payAd') : s.i18n.t('ads.wait', {'n': gate.secondsLeft}),
+              glyph: Glyph.film,
+              onTap: () => gate.ready
+                  ? Navigator.pop(context, Payment.ad)
+                  : showToast(context, s.i18n.t('ads.wait', {'n': gate.secondsLeft})),
+            );
+          },
+        ),
       ],
       const SizedBox(height: 10),
       StoneButton(label: s.i18n.t('common.cancel'), dense: true, onTap: () => Navigator.pop(context)),
@@ -46,6 +60,8 @@ void _report(BuildContext context, BoosterResult result, {required bool viaAd}) 
       showToast(context, i18n.t('ads.closedEarly'));
     case BoosterResult.adFailed:
       showToast(context, i18n.t('ads.failed'));
+    case BoosterResult.adWait:
+      showToast(context, i18n.t('ads.wait', {'n': Services.of(context, listen: false).adGate.secondsLeft}));
     case BoosterResult.noHint:
       showToast(context, i18n.t('game.hintNone'));
     case BoosterResult.unsure:
@@ -85,12 +101,14 @@ Future<void> boosterSlot(BuildContext context, GameController game) async {
 
 Future<void> boosterHint(BuildContext context, GameController game) async {
   final s = Services.of(context, listen: false);
-  final pay = await _choosePayment(context,
-      title: s.i18n.t('booster.hint.title'),
-      body: s.i18n.t('booster.hint.body'),
-      coins: game.boosterRules.hintCoins,
-      adAllowed: game.adHintsLeft > 0,
-      note: s.i18n.t('booster.adLimit', {'n': game.engine.boosters.adHints, 'max': game.boosterRules.hintAdLimit}));
+  // Free hints first (per level, or per endless run); then a coin or an ad.
+  final pay = game.freeHintsLeft > 0
+      ? Payment.free
+      : await _choosePayment(context,
+          title: s.i18n.t('booster.hint.title'),
+          body: s.i18n.t('booster.hint.body'),
+          coins: game.boosterRules.hintCoins,
+          adAllowed: game.boosterRules.hintByAd);
   if (pay == null || !context.mounted) return;
   final r = await game.useHint(pay);
   if (!context.mounted) return;
@@ -101,8 +119,21 @@ Future<void> boosterHint(BuildContext context, GameController game) async {
 Future<void> boosterSwap(BuildContext context, GameController game) async {
   final s = Services.of(context, listen: false);
   if (game.engine.tray.length < 2) return showToast(context, s.i18n.t('game.swapNeedTwo'));
-  final pay = await _choosePayment(context, title: s.i18n.t('booster.swap.title'), body: s.i18n.t('booster.swap.body'), coins: game.boosterRules.swapCoins, adAllowed: false);
-  if (pay == null || !context.mounted) return;
+  if (!game.policy.swapLeft(game.engine.boosters)) return showToast(context, s.i18n.t('booster.swapUsed'));
+  // The swap is free (endless: once per run) or locked until a coin or an ad
+  // opens it for this board.
+  if (!game.swapReady) {
+    final pay = await _choosePayment(context,
+        title: s.i18n.t('booster.swap.title'),
+        body: s.i18n.t('booster.swap.body'),
+        coins: game.boosterRules.swapCoins,
+        adAllowed: game.boosterRules.swapByAd);
+    if (pay == null || !context.mounted) return;
+    final paid = await game.unlockSwap(pay);
+    if (!context.mounted) return;
+    _report(context, paid, viaAd: pay == Payment.ad);
+    if (paid != BoosterResult.done) return;
+  }
   _report(context, game.startSwap(), viaAd: false);
 }
 

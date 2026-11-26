@@ -1,3 +1,6 @@
+import 'dart:math' as math;
+
+import '../engine/game_engine.dart';
 import '../jobs/compute_job.dart';
 import '../solver/solver_context.dart';
 import '../solver/solver_search.dart';
@@ -5,32 +8,43 @@ import '../util/json_read.dart';
 
 enum BoosterType { extraSlot, hint, swap }
 
-/// Costs and limits of the three boosters (from `economy.json`).
+/// Costs and allowances of the three boosters (from `economy.json`).
 class BoosterRules {
   const BoosterRules({
     this.extraSlotCoins = 1,
     this.extraSlotByAd = true,
     this.extraSlots = 1,
     this.hintCoins = 1,
-    this.hintAdLimit = 3,
+    this.hintByAd = true,
+    this.freeHints = const {'levels': 3, 'endless': 3},
     this.swapCoins = 1,
-    this.swapsPerAttempt = 1,
-    this.swapByAd = false,
+    this.swapByAd = true,
+    this.swapsPerBoard = 1,
+    this.freeSwaps = const {'levels': 0, 'endless': 1},
+    this.adCooldown = const Duration(seconds: 10),
   });
 
   factory BoosterRules.fromJson(Map<String, Object?> json) {
     final slot = readMap(json['extraSlot']);
     final hint = readMap(json['hint']);
     final swap = readMap(json['swap']);
+    Map<String, int> perMode(Object? v, Map<String, int> fallback) {
+      final m = readMap(v);
+      return m.isEmpty ? fallback : {for (final e in m.entries) e.key: readInt(e.value)};
+    }
+
     return BoosterRules(
       extraSlotCoins: readInt(slot['coins'], 1),
       extraSlotByAd: readBool(slot['ad'], true),
       extraSlots: readInt(slot['slots'], 1),
       hintCoins: readInt(hint['coins'], 1),
-      hintAdLimit: readInt(hint['adLimit'], 3),
+      hintByAd: readBool(hint['ad'], true),
+      freeHints: perMode(hint['free'], const {'levels': 3, 'endless': 3}),
       swapCoins: readInt(swap['coins'], 1),
-      swapsPerAttempt: readInt(swap['perAttempt'], 1),
-      swapByAd: readBool(swap['ad']),
+      swapByAd: readBool(swap['ad'], true),
+      swapsPerBoard: readInt(swap['perBoard'], 1),
+      freeSwaps: perMode(swap['free'], const {'levels': 0, 'endless': 1}),
+      adCooldown: Duration(seconds: readInt(json['adCooldownSeconds'], 10)),
     );
   }
 
@@ -40,12 +54,59 @@ class BoosterRules {
   /// Slots added by the booster (the sixth slot).
   final int extraSlots;
   final int hintCoins;
+  final bool hintByAd;
 
-  /// Hints that can be earned with ads in one attempt (coins: unlimited).
-  final int hintAdLimit;
+  /// Free hints: per level attempt in `levels`, per whole run in `endless`.
+  final Map<String, int> freeHints;
   final int swapCoins;
-  final int swapsPerAttempt;
   final bool swapByAd;
+
+  /// Most swaps on one board (the engine allows one).
+  final int swapsPerBoard;
+
+  /// Free swaps: per level attempt in `levels`, per whole run in `endless`.
+  final Map<String, int> freeSwaps;
+
+  /// The wait between two ads, wherever they are opened.
+  final Duration adCooldown;
+
+  int freeHintsIn(String mode) => freeHints[mode] ?? 0;
+
+  int freeSwapsIn(String mode) => freeSwaps[mode] ?? 0;
+}
+
+/// Who pays for what in each mode:
+///
+/// * Levels — 3 free hints at the start of every level (renewed with every
+///   attempt); the swap is locked until a coin or an ad opens one; the sixth
+///   slot costs a coin or an ad and lasts for the attempt.
+/// * Endless — 3 free hints for the whole run, never renewed by progress;
+///   one free swap for the whole run, then a coin or an ad; the sixth slot
+///   costs a coin or an ad and lasts for the current board only.
+/// * Everywhere — one swap per board; every hint beyond the free ones costs
+///   a coin or an ad.
+class BoosterPolicy {
+  const BoosterPolicy(this.rules);
+
+  final BoosterRules rules;
+
+  /// Free hints still available on this board. In endless the allowance is
+  /// shared by the whole run ([runFreeHintsUsed]).
+  int freeHintsLeft({required String mode, required BoosterUsage board, int runFreeHintsUsed = 0}) {
+    final used = mode == 'endless' ? runFreeHintsUsed : board.freeHints;
+    return math.max(0, rules.freeHintsIn(mode) - used);
+  }
+
+  /// Whether this board may still have a swap at all.
+  bool swapLeft(BoosterUsage board) => !board.swapUsed;
+
+  /// Whether the next swap on this board costs nothing more: it was paid
+  /// for already, or the mode's free swap covers it.
+  bool swapReady({required String mode, required BoosterUsage board, bool runFreeSwapUsed = false}) {
+    if (board.swapUnlocked) return true;
+    if (rules.freeSwapsIn(mode) <= 0) return false;
+    return mode == 'endless' ? !runFreeSwapUsed : true;
+  }
 }
 
 enum RescueKind { extraSlot, swap }

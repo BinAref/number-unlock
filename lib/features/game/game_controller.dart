@@ -5,6 +5,7 @@ import 'package:flutter/foundation.dart';
 import '../../core/boosters/booster_system.dart';
 import '../../core/economy/wallet.dart';
 import '../../core/endless/endless_director.dart';
+import '../../core/endless/endless_run.dart';
 import '../../core/endless/endless_stats.dart';
 import '../../core/engine/game_engine.dart';
 import '../../core/hint/hint_system.dart';
@@ -28,9 +29,10 @@ class TrayEntry {
   bool vanishing = false;
 }
 
-enum Payment { coins, ad }
+/// How a help is paid for: from the free allowance, with coins, or an ad.
+enum Payment { free, coins, ad }
 
-enum BoosterResult { done, insufficient, adClosed, adFailed, unavailable, noHint, unsure }
+enum BoosterResult { done, insufficient, adClosed, adFailed, adWait, unavailable, noHint, unsure }
 
 /// Drives one attempt: the logic commits first (and is saved), then the
 /// visuals replay it — fly, land, glow, vanish, close ranks, chain. An
@@ -101,7 +103,16 @@ class GameController extends ChangeNotifier {
   BoosterRules get boosterRules => services.boosters;
   bool get busy => _busy;
   int get capacity => engine.capacity;
-  int get adHintsLeft => (boosterRules.hintAdLimit - engine.boosters.adHints).clamp(0, boosterRules.hintAdLimit);
+  BoosterPolicy get policy => BoosterPolicy(boosterRules);
+
+  /// The endless run, when this board belongs to one.
+  EndlessRun? get _run => mode == PuzzleMode.endless ? services.endless.run : null;
+
+  /// Free hints still available on this board (in endless, the run's).
+  int get freeHintsLeft => policy.freeHintsLeft(mode: mode.key, board: engine.boosters, runFreeHintsUsed: _run?.hintsUsed ?? 0);
+
+  /// Whether the next swap costs nothing more (paid already, or free).
+  bool get swapReady => policy.swapReady(mode: mode.key, board: engine.boosters, runFreeSwapUsed: _run?.freeSwapUsed ?? false);
 
   TileSpec spec(int cell) => engine.specOf(cell);
 
@@ -284,7 +295,7 @@ class GameController extends ChangeNotifier {
 
   /// The sixth slot (coins or an ad; never charged when already open).
   Future<BoosterResult> addSlot(Payment pay) async {
-    if (_busy || !engine.canAddSlot) return BoosterResult.unavailable;
+    if (_busy || !engine.canAddSlot || pay == Payment.free) return BoosterResult.unavailable;
     _busy = true;
     try {
       if (pay == Payment.coins) {
@@ -292,7 +303,8 @@ class GameController extends ChangeNotifier {
         if (r != SpendResult.spent) return r == SpendResult.insufficient ? BoosterResult.insufficient : BoosterResult.unavailable;
       } else {
         if (!boosterRules.extraSlotByAd) return BoosterResult.unavailable;
-        final o = await services.ads.show('extra_slot');
+        final o = await services.adGate.show('extra_slot');
+        if (o == null) return BoosterResult.adWait;
         if (o != AdOutcome.rewarded) return _mapAd(o);
       }
       engine.addSlot();
@@ -313,7 +325,9 @@ class GameController extends ChangeNotifier {
   /// The smart hint: computed first, paid only when a real hint exists.
   Future<BoosterResult> useHint(Payment pay) async {
     if (_busy || ended != null) return BoosterResult.unavailable;
-    if (pay == Payment.ad && adHintsLeft <= 0) return BoosterResult.unavailable;
+    if (pay == Payment.free && freeHintsLeft <= 0) return BoosterResult.unavailable;
+    if (pay == Payment.ad && !boosterRules.hintByAd) return BoosterResult.unavailable;
+    if (pay == Payment.ad && !services.adGate.ready) return BoosterResult.adWait;
     if (pay == Payment.coins && !services.player.canAfford(boosterRules.hintCoins)) return BoosterResult.insufficient;
     _busy = true;
     thinking = true;
@@ -331,14 +345,23 @@ class GameController extends ChangeNotifier {
         return BoosterResult.noHint;
       }
       if (result.status == HintStatus.undetermined || result.cell == null) return BoosterResult.unsure;
-      if (pay == Payment.coins) {
-        final r = services.player.spend(boosterRules.hintCoins, 'hint:$_attempt:${engine.boosters.hints}');
-        if (r != SpendResult.spent) return BoosterResult.insufficient;
-        engine.recordHint(viaAd: false);
-      } else {
-        final o = await services.ads.show('hint');
-        if (o != AdOutcome.rewarded) return _mapAd(o);
-        engine.recordHint(viaAd: true);
+      switch (pay) {
+        case Payment.free:
+          engine.recordHint(viaAd: false, free: true);
+          final run = _run;
+          if (run != null) {
+            run.hintsUsed++;
+            services.endless.saveRun();
+          }
+        case Payment.coins:
+          final r = services.player.spend(boosterRules.hintCoins, 'hint:$_attempt:${engine.boosters.hints}');
+          if (r != SpendResult.spent) return BoosterResult.insufficient;
+          engine.recordHint(viaAd: false);
+        case Payment.ad:
+          final o = await services.adGate.show('hint');
+          if (o == null) return BoosterResult.adWait;
+          if (o != AdOutcome.rewarded) return _mapAd(o);
+          engine.recordHint(viaAd: true);
       }
       hintCell = result.cell;
       services.audio.play(Sfx.hint);
@@ -351,11 +374,38 @@ class GameController extends ChangeNotifier {
     }
   }
 
-  /// Enters swap mode (charged only when the swap really happens).
+  /// Pays for this board's swap with a coin or an ad. Once paid, the swap
+  /// can be made — or cancelled and made later on the same board — without
+  /// paying again.
+  Future<BoosterResult> unlockSwap(Payment pay) async {
+    if (_busy || !policy.swapLeft(engine.boosters)) return BoosterResult.unavailable;
+    if (swapReady) return BoosterResult.done;
+    if (pay == Payment.coins) {
+      final r = services.player.spend(boosterRules.swapCoins, 'swap:$_attempt');
+      if (r != SpendResult.spent) return r == SpendResult.insufficient ? BoosterResult.insufficient : BoosterResult.unavailable;
+    } else if (pay == Payment.ad && boosterRules.swapByAd) {
+      _busy = true;
+      try {
+        final o = await services.adGate.show('swap');
+        if (o == null) return BoosterResult.adWait;
+        if (o != AdOutcome.rewarded) return _mapAd(o);
+      } finally {
+        _busy = false;
+      }
+    } else {
+      return BoosterResult.unavailable;
+    }
+    engine.boosters.swapUnlocked = true;
+    _persist();
+    _notify();
+    return BoosterResult.done;
+  }
+
+  /// Enters swap mode once the swap is free or paid for (one per board).
   BoosterResult startSwap() {
-    if (_busy || engine.boosters.swapUsed) return BoosterResult.unavailable;
+    if (_busy || !policy.swapLeft(engine.boosters)) return BoosterResult.unavailable;
     if (engine.tray.length < 2) return BoosterResult.unavailable;
-    if (!services.player.canAfford(boosterRules.swapCoins)) return BoosterResult.insufficient;
+    if (!swapReady) return BoosterResult.insufficient;
     swapMode = true;
     swapFirst = null;
     _notify();
@@ -377,15 +427,21 @@ class GameController extends ChangeNotifier {
       _notify();
       return;
     }
-    if (services.player.spend(boosterRules.swapCoins, 'swap:$_attempt') != SpendResult.spent) {
+    if (!swapReady) {
       cancelSwap();
-      onMessage?.call('game.noCoins');
       return;
     }
+    final freeSwap = !engine.boosters.swapUnlocked;
     _busy = true;
     swapMode = false;
     swapFirst = null;
     final result = engine.swap(first, slot);
+    final run = _run;
+    if (freeSwap && run != null) {
+      // The run's one free swap is spent.
+      run.freeSwapUsed = true;
+      services.endless.saveRun();
+    }
     sheet?.usedSwap = true;
     final a = tray[first];
     tray[first] = tray[slot];

@@ -23,32 +23,60 @@ enum MoveRejection { finished, notATile, alreadyTaken, locked, noFreeSlot }
 /// Booster use within one attempt. Saved with the attempt, so resuming never
 /// resets the limits.
 class BoosterUsage {
-  BoosterUsage({this.extraSlot = false, this.swapUsed = false, this.adHints = 0, this.coinHints = 0});
+  BoosterUsage({
+    this.extraSlot = false,
+    this.swapUsed = false,
+    this.swapUnlocked = false,
+    this.adHints = 0,
+    this.coinHints = 0,
+    this.freeHints = 0,
+  });
 
   factory BoosterUsage.fromJson(Map<String, Object?> json) => BoosterUsage(
         extraSlot: readBool(json['extraSlot']),
         swapUsed: readBool(json['swap']),
+        swapUnlocked: readBool(json['swapUnlocked']),
         adHints: readInt(json['adHints']),
         coinHints: readInt(json['coinHints']),
+        freeHints: readInt(json['freeHints']),
       );
 
   bool extraSlot;
   bool swapUsed;
+
+  /// A swap paid for on this board (coin or ad), not yet necessarily used.
+  bool swapUnlocked;
   int adHints;
   int coinHints;
 
-  bool get anyUsed => extraSlot || swapUsed || adHints > 0 || coinHints > 0;
+  /// Hints taken from the free allowance.
+  int freeHints;
 
-  int get hints => adHints + coinHints;
+  bool get anyUsed => extraSlot || swapUsed || hints > 0;
 
-  /// Every help taken on this board: each hint, the sixth slot and a swap
-  /// count one apiece (the star rule of the fixed levels).
+  int get hints => adHints + coinHints + freeHints;
+
+  /// Every help taken on this board: each hint (free or paid), the sixth
+  /// slot and a swap count one apiece (the star rule of the fixed levels).
   int get helps => hints + (extraSlot ? 1 : 0) + (swapUsed ? 1 : 0);
 
-  BoosterUsage copy() =>
-      BoosterUsage(extraSlot: extraSlot, swapUsed: swapUsed, adHints: adHints, coinHints: coinHints);
+  BoosterUsage copy() => BoosterUsage(
+        extraSlot: extraSlot,
+        swapUsed: swapUsed,
+        swapUnlocked: swapUnlocked,
+        adHints: adHints,
+        coinHints: coinHints,
+        freeHints: freeHints,
+      );
 
-  Map<String, Object?> toJson() => {'extraSlot': extraSlot, 'swap': swapUsed, 'adHints': adHints, 'coinHints': coinHints};
+  Map<String, Object?> toJson() => {
+        'extraSlot': extraSlot,
+        'swap': swapUsed,
+        'swapUnlocked': swapUnlocked,
+        'adHints': adHints,
+        'coinHints': coinHints,
+        'freeHints': freeHints,
+      };
 }
 
 class ExtractResult {
@@ -256,8 +284,12 @@ class GameEngine {
     return SwapResult(a: a, b: b, matches: steps, status: status, lossReason: lossReason);
   }
 
-  void recordHint({required bool viaAd}) {
-    if (viaAd) {
+  /// Counts a hint taken: from the free allowance, paid with an ad, or with
+  /// coins.
+  void recordHint({required bool viaAd, bool free = false}) {
+    if (free) {
+      boosters.freeHints++;
+    } else if (viaAd) {
       boosters.adHints++;
     } else {
       boosters.coinHints++;

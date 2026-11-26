@@ -12,8 +12,9 @@
   },
   "boosters": {
     "extraSlot": { "coins": 1, "ad": true, "slots": 1 },
-    "hint": { "coins": 1, "adLimit": 3 },
-    "swap": { "coins": 1, "perAttempt": 1, "ad": false }
+    "hint": { "coins": 1, "ad": true, "free": { "levels": 3, "endless": 3 } },
+    "swap": { "coins": 1, "ad": true, "perBoard": 1, "free": { "levels": 0, "endless": 1 } },
+    "adCooldownSeconds": 10
   },
   "solver": {
     "hintBudget": 300000,
