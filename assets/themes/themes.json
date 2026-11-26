@@ -1,0 +1,9 @@
+{
+  "default": "system",
+  "systemLight": "day",
+  "systemDark": "night",
+  "themes": [
+    { "id": "day", "file": "day.json", "nameKey": "theme.day", "brightness": "light" },
+    { "id": "night", "file": "night.json", "nameKey": "theme.night", "brightness": "dark" }
+  ]
+}

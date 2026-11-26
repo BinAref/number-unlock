@@ -1,0 +1,20 @@
+{
+  "appVersion": "1.0.0",
+  "supportUrl": "https://github.com/BinAref/number-unlock/issues",
+  "privacyUrl": "https://binaref.github.io/number-unlock/privacy.html",
+  "defaultLanguage": "en",
+  "defaultTheme": "system",
+  "ads": {
+    "provider": "mock",
+    "mockSeconds": 3,
+    "rewardedUnits": { "android": "", "ios": "" }
+  },
+  "purchases": {
+    "provider": "mock",
+    "mockDelayMs": 900
+  },
+  "progression": {
+    "openAhead": 0,
+    "mapSpacing": 118
+  }
+}

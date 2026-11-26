@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <!-- Replaced by `flutter build web --base-href /repo-name/` (GitHub Pages)
+       or `--base-href /` (your own domain root). -->
+  <base href="$FLUTTER_BASE_HREF">
+
+  <meta charset="UTF-8">
+  <meta content="IE=Edge" http-equiv="X-UA-Compatible">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="description" content="Unlock Numbers — a calm, clever number-unlocking puzzle.">
+  <meta name="theme-color" content="#1A2563">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Unlock Numbers">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="icon" type="image/png" href="favicon.png">
+  <link rel="manifest" href="manifest.json">
+  <title>Unlock Numbers</title>
+  <style>
+    html, body { margin: 0; height: 100%; background: #0B1033; overflow: hidden; }
+    #splash { position: fixed; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      background: radial-gradient(circle at 50% 60%, #46387F 0%, #1A2563 45%, #070B2E 100%); transition: opacity .5s ease; z-index: 10; }
+    #splash.fade { opacity: 0; pointer-events: none; }
+    #splash .lock { position: relative; width: 92px; height: 104px; animation: pulse 1.8s ease-in-out infinite; }
+    #splash .shackle { position: absolute; left: 20px; top: 0; width: 52px; height: 56px; box-sizing: border-box;
+      border: 12px solid #EDB846; border-bottom: none; border-radius: 30px 30px 0 0; animation: lift 1.8s ease-in-out infinite; }
+    #splash .body { position: absolute; left: 0; bottom: 0; width: 92px; height: 64px; border-radius: 16px;
+      background: linear-gradient(135deg, #FFEFB0, #EDB846 50%, #A86D18); box-shadow: 0 0 40px rgba(255, 214, 110, .55); }
+    #splash .body::after { content: ""; position: absolute; left: 39px; top: 18px; width: 14px; height: 24px; border-radius: 7px 7px 3px 3px; background: #683F0B; }
+    #splash .title { margin-top: 26px; font: 700 22px/1.2 Georgia, serif; letter-spacing: 3px; color: #FFE08A;
+      text-shadow: 0 2px 0 #683F0B, 0 0 18px rgba(255, 214, 110, .6); }
+    @keyframes pulse { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.06); } }
+    @keyframes lift { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+  </style>
+  <script>
+    // PWA: keep the browser's install prompt so Settings can offer "Install the app".
+    (function () {
+      var deferred = null;
+      window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); deferred = e; });
+      window.addEventListener('appinstalled', function () { deferred = null; });
+      window.unlockNumbersPwa = {
+        canPrompt: function () { return deferred !== null; },
+        isStandalone: function () { return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true; },
+        prompt: function () {
+          if (!deferred) return Promise.resolve(false);
+          var p = deferred; deferred = null; p.prompt();
+          return p.userChoice.then(function (c) { return c.outcome === 'accepted'; });
+        }
+      };
+      // Offline play: the game's own service worker (sw.js).
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', function () { navigator.serviceWorker.register('sw.js').catch(function () {}); });
+      }
+    })();
+  </script>
+</head>
+<body>
+  <div id="splash"><div class="lock"><div class="shackle"></div><div class="body"></div></div><div class="title">UNLOCK NUMBERS</div></div>
+  <script src="flutter_bootstrap.js" async></script>
+</body>
+</html>

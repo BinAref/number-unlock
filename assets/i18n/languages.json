@@ -1,0 +1,8 @@
+{
+  "fallback": "en",
+  "languages": [
+    { "code": "ar", "name": "العربية", "dir": "rtl", "file": "ar.json", "font": "Cairo", "plural": "arabic" },
+    { "code": "en", "name": "English", "dir": "ltr", "file": "en.json", "font": "NunitoSans", "plural": "oneOther" },
+    { "code": "tr", "name": "Türkçe", "dir": "ltr", "file": "tr.json", "font": "NunitoSans", "plural": "other" }
+  ]
+}

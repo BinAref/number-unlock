@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "baseSeed": 77001,
+  "tiers": [
+    {
+      "from": 1, "to": 2,
+      "grids": [[3, 3, 0, 1], [3, 3, 0, 2]], "complement": [0.3, 0.4], "colors": [4, 5],
+      "peel": ["mixed"], "climb": [0.4, 0.5], "spread": [0.0, 0.0],
+      "score": [5, 15], "width": 14, "attempts": 4
+    },
+    {
+      "from": 3, "to": 4,
+      "grids": [[4, 4, 0, 2], [3, 3, 0, 2]], "complement": [0.4, 0.5], "colors": [5, 5],
+      "peel": ["mixed"], "climb": [0.5, 0.6], "spread": [0.3, 0.5],
+      "score": [12, 26], "width": 14, "attempts": 4
+    },
+    {
+      "from": 5, "to": 7,
+      "grids": [[4, 4, 0, 2], [5, 5, 0, 2]], "complement": [0.5, 0.6], "colors": [5, 6],
+      "peel": ["deep"], "climb": [0.6, 0.7], "spread": [0.7, 0.9],
+      "score": [24, 36], "width": 14, "attempts": 4
+    },
+    {
+      "from": 8, "to": 10,
+      "grids": [[4, 4, 1, 3], [3, 3, 0, 2], [6, 6, 2, 2]], "complement": [0.6, 0.65], "colors": [6, 6],
+      "peel": ["deep"], "climb": [0.7, 0.8], "spread": [1.0, 1.0], "harden": [150, 200],
+      "score": [32, 46], "width": 16, "attempts": 4
+    },
+    {
+      "from": 11, "to": 14,
+      "grids": [[4, 4, 2, 3], [4, 4, 1, 3]], "complement": [0.65, 0.7], "colors": [6, 7],
+      "peel": ["deep"], "climb": [0.8, 0.8], "spread": [1.0, 1.0], "harden": [220, 260],
+      "score": [40, 56], "width": 16, "attempts": 4
+    },
+    {
+      "from": 15, "to": 9999,
+      "grids": [[4, 4, 2, 4], [4, 4, 2, 3]], "complement": [0.7, 0.8], "colors": [7, 8],
+      "peel": ["deep"], "climb": [0.9, 0.9], "spread": [1.0, 1.0], "harden": [300, 300],
+      "score": [50, 72], "width": 18, "attempts": 4
+    }
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "currentVersion": 1,
+  "rulesets": [
+    {
+      "version": 1,
+      "rules": [
+        {
+          "id": "pair_equal",
+          "enabled": true,
+          "priority": 100,
+          "size": 2,
+          "adjacency": "contiguous",
+          "value": "allEqual",
+          "color": "any",
+          "order": "any",
+          "modes": ["levels", "challenge"],
+          "minLevel": 1,
+          "demo": ["4a", "4e"]
+        },
+        {
+          "id": "pair_sum10",
+          "enabled": true,
+          "priority": 90,
+          "size": 2,
+          "adjacency": "contiguous",
+          "value": "sum",
+          "sum": 10,
+          "color": "any",
+          "order": "any",
+          "modes": ["levels", "challenge"],
+          "minLevel": 1,
+          "demo": ["3b", "7f"]
+        },
+        {
+          "id": "triple_sum10_distinct",
+          "enabled": false,
+          "priority": 110,
+          "size": 3,
+          "adjacency": "contiguous",
+          "value": "sum",
+          "sum": 10,
+          "color": "allDistinct",
+          "order": "any",
+          "modes": ["levels", "challenge"],
+          "minLevel": 1,
+          "demo": ["2a", "3c", "5e"]
+        }
+      ]
+    }
+  ]
+}

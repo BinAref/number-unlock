@@ -1,0 +1,28 @@
+{
+  "baseCapacity": 5,
+  "startingCoins": 5,
+  "rewards": {
+    "levelFirstClear": 1,
+    "threeStarBonus": 1,
+    "challengeBase": 1,
+    "challengeEvery": 3
+  },
+  "xp": {
+    "level": 20,
+    "star": 10,
+    "challenge": 25,
+    "challengeTier": 5,
+    "base": 100,
+    "growth": 1.12
+  },
+  "boosters": {
+    "extraSlot": { "coins": 1, "ad": true, "slots": 1 },
+    "hint": { "coins": 1, "adLimit": 3 },
+    "swap": { "coins": 1, "perAttempt": 1, "ad": false }
+  },
+  "solver": {
+    "hintBudget": 300000,
+    "rescueBudget": 220000,
+    "sliceMs": 7
+  }
+}

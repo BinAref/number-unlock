@@ -1,0 +1,9 @@
+{
+  "currency": "coins",
+  "products": [
+    { "id": "com.binaref.unlocknumbers.coins.pouch", "coins": 20, "price": "$0.99", "chest": "pouch", "nameKey": "shop.pack.pouch" },
+    { "id": "com.binaref.unlocknumbers.coins.chest", "coins": 60, "price": "$1.99", "chest": "small", "nameKey": "shop.pack.small", "badge": "popular", "bonusPercent": 20 },
+    { "id": "com.binaref.unlocknumbers.coins.treasure", "coins": 150, "price": "$3.99", "chest": "large", "nameKey": "shop.pack.large", "badge": "bestValue", "bonusPercent": 50 },
+    { "id": "com.binaref.unlocknumbers.coins.vault", "coins": 400, "price": "$8.99", "chest": "vault", "nameKey": "shop.pack.vault", "bonusPercent": 100 }
+  ]
+}

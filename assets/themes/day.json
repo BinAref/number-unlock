@@ -1,0 +1,117 @@
+{
+  "id": "day",
+  "colors": {
+    "sky.top": "#4FA9EE",
+    "sky.mid": "#9ED6FA",
+    "sky.horizon": "#FFE9C7",
+    "sky.glow": "#FFF4D6",
+    "sky.celestial": "#FFF7D9",
+    "sky.celestialGlow": "#FFE39A",
+    "sky.star": "#FFFFFF",
+
+    "cloud.light": "#FFFFFF",
+    "cloud.shade": "#D2E3F6",
+    "cloud.far": "#EEF6FD",
+
+    "island.grass": "#79C463",
+    "island.grassLight": "#A9E07F",
+    "island.earth": "#9B7352",
+    "island.rock": "#7C87CC",
+    "island.rockShade": "#5A60A3",
+    "island.rockDeep": "#3E427C",
+    "island.far": "#A9C6EA",
+
+    "water.fall": "#E4F8FF",
+    "water.fallShade": "#8ED4F3",
+    "water.glow": "#C8F2FF",
+    "water.mist": "#FFFFFF",
+
+    "stone.light": "#D6D2F0",
+    "stone.base": "#A7A2D3",
+    "stone.dark": "#726DA6",
+    "stone.mortar": "#5A5584",
+    "stone.deep": "#403C68",
+    "stone.blue": "#6F91E0",
+    "stone.purple": "#9C78D8",
+    "stone.moss": "#88C566",
+
+    "gold.light": "#FFF4C2",
+    "gold.base": "#F3C44F",
+    "gold.dark": "#B67B1F",
+    "gold.deep": "#76490E",
+    "gold.glow": "#FFE48A",
+
+    "crystal.blue": "#7FD8FF",
+    "crystal.purple": "#C59BFF",
+    "crystal.glow": "#E8F8FF",
+
+    "lamp.light": "#FFEBB0",
+    "lamp.glow": "#FFD36B",
+
+    "plant.leaf": "#5EAE55",
+    "plant.leafLight": "#8FD177",
+    "plant.vine": "#468A43",
+    "plant.flower": "#FF9AC3",
+
+    "particle.color": "#FFF0B5",
+
+    "text.onStone": "#FFFFFF",
+    "text.shadow": "#2B2754",
+    "text.onGold": "#5A3708",
+    "text.muted": "#EEEBFF",
+    "text.accent": "#FFE38A",
+    "text.dark": "#3A3466",
+
+    "ui.panel": "#5A5594",
+    "ui.panelLight": "#7A75B8",
+    "ui.panelDeep": "#38346A",
+    "ui.overlay": "#1A1740",
+    "ui.success": "#6BD68D",
+    "ui.danger": "#FF7C7C",
+    "ui.focus": "#7DE6FF",
+    "ui.toggleOn": "#7BE59A",
+    "ui.toggleOff": "#918DBE",
+    "ui.progress": "#7FE7FF",
+    "ui.progressGlow": "#C2F5FF",
+    "ui.gem": "#5BD38A",
+
+    "tile.number": "#FFFFFF",
+    "tile.numberStroke": "#2A2452",
+    "tile.locked": "#2A2552",
+    "tile.rim": "#FFF2C0",
+    "tile.glow": "#FFF2A8",
+    "tile.hint": "#FFE066",
+    "tile.swap": "#7DE6FF",
+    "tile.match": "#FFFFFF",
+    "tile.shadow": "#1B1742",
+
+    "slot.socket": "#45407A",
+    "slot.socketLight": "#625D9C",
+    "slot.rim": "#EBC66C",
+    "slot.fresh": "#A2F1FF"
+  },
+  "palettes": {
+    "tiles": ["#E8564E", "#F39A33", "#EFCB3B", "#4DBA69", "#31B4C8", "#4A7AE3", "#8E5FD8", "#DF66AD"]
+  },
+  "numbers": {
+    "sky.stars": 0.0,
+    "sky.rays": 0.35,
+    "sky.celestialX": 0.80,
+    "sky.celestialY": 0.11,
+    "sky.celestialSize": 0.09,
+    "sky.celestialCrescent": 0.0,
+    "cloud.opacity": 0.96,
+    "island.farOpacity": 0.75,
+    "water.mistOpacity": 0.5,
+    "water.glowStrength": 0.25,
+    "crystal.intensity": 0.55,
+    "lamp.intensity": 0.35,
+    "particle.count": 22,
+    "particle.fireflies": 0.0,
+    "ui.overlayOpacity": 0.5,
+    "tile.lockedOpacity": 0.52,
+    "tile.lockedDesaturate": 0.7,
+    "tile.glowStrength": 0.65,
+    "world.shadowStrength": 0.32
+  }
+}
