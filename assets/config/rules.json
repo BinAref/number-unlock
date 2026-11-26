@@ -13,7 +13,7 @@
           "value": "allEqual",
           "color": "any",
           "order": "any",
-          "modes": ["levels", "challenge"],
+          "modes": ["levels", "endless"],
           "minLevel": 1,
           "demo": ["4a", "4e"]
         },
@@ -27,7 +27,7 @@
           "sum": 10,
           "color": "any",
           "order": "any",
-          "modes": ["levels", "challenge"],
+          "modes": ["levels", "endless"],
           "minLevel": 1,
           "demo": ["3b", "7f"]
         },
@@ -41,7 +41,7 @@
           "sum": 10,
           "color": "allDistinct",
           "order": "any",
-          "modes": ["levels", "challenge"],
+          "modes": ["levels", "endless"],
           "minLevel": 1,
           "demo": ["2a", "3c", "5e"]
         }

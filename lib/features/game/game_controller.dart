@@ -3,13 +3,13 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../core/boosters/booster_system.dart';
-import '../../core/challenge/challenge_scorer.dart';
-import '../../core/challenge/challenge_system.dart';
 import '../../core/economy/wallet.dart';
+import '../../core/endless/endless_director.dart';
+import '../../core/endless/endless_stats.dart';
 import '../../core/engine/game_engine.dart';
 import '../../core/hint/hint_system.dart';
-import '../../core/levels/level_progress.dart';
 import '../../core/model/puzzle_definition.dart';
+import '../../core/scoring/move_scorer.dart';
 import '../../core/model/tile_spec.dart';
 import '../../core/rules/match_resolver.dart';
 import '../../core/rules/rule_engine.dart';
@@ -36,19 +36,19 @@ enum BoosterResult { done, insufficient, adClosed, adFailed, unavailable, noHint
 /// visuals replay it — fly, land, glow, vanish, close ranks, chain. An
 /// interrupted animation can never change what happened.
 class GameController extends ChangeNotifier {
-  GameController({required this.services, required PuzzleDefinition puzzle, GameSnapshot? resume, this.run}) {
+  GameController({required this.services, required PuzzleDefinition puzzle, GameSnapshot? resume}) {
     final rules = RuleEngine.forPuzzle(
       services.rules.byVersion(puzzle.rulesetVersion),
       mode: puzzle.mode.key,
-      level: puzzle.levelNumber ?? puzzle.challengeTier,
+      level: puzzle.levelNumber ?? puzzle.boardNumber,
     );
     engine = resume != null ? GameEngine.resume(resume, rules: rules) : GameEngine(puzzle: puzzle, rules: rules, baseCapacity: services.baseCapacity);
     _ctx = SolverContext(engine.puzzle.layout, rules);
     tray = [for (final c in engine.trayItems) TrayEntry(c)];
     _attempt = '${puzzle.id}@${DateTime.now().microsecondsSinceEpoch}';
-    if (puzzle.mode == PuzzleMode.challenge) {
+    if (puzzle.mode == PuzzleMode.endless) {
       sheet = ScoreSheet();
-      _scorer = ChallengeScorer(_ctx);
+      _scorer = MoveScorer(_ctx);
     }
     if (engine.status == GameStatus.lost) {
       ended = GameStatus.lost;
@@ -58,9 +58,6 @@ class GameController extends ChangeNotifier {
   }
 
   final AppServices services;
-
-  /// The current challenge run (challenge mode only).
-  final ChallengeRun? run;
   late final GameEngine engine;
   late final SolverContext _ctx;
   late final String _attempt;
@@ -83,13 +80,18 @@ class GameController extends ChangeNotifier {
   int stars = 0;
   bool _disposed = false;
 
-  /// Challenge scoring: every pick graded against the perfect path.
+  /// Endless scoring: every pick graded against the perfect path.
   ScoreSheet? sheet;
-  ChallengeScorer? _scorer;
+  MoveScorer? _scorer;
   Future<void> _grading = Future<void>.value();
   bool scoring = false;
+
+  /// Points the cleared endless board banked, and the coins it paid.
   int? puzzlePoints;
-  bool newBest = false;
+  int boardCoins = 0;
+
+  /// The finished endless run, once the player ends it after a loss.
+  RunSummary? runSummary;
 
   /// Reports a localisation key to show as a short message.
   void Function(String key, [Map<String, Object?> args])? onMessage;
@@ -216,11 +218,6 @@ class GameController extends ChangeNotifier {
       _onWin();
     } else if (status == GameStatus.lost) {
       ended = GameStatus.lost;
-      final r = run;
-      if (r != null) {
-        puzzlePoints = 0;
-        newBest = services.player.recordRunScore(r.score, r.tier);
-      }
       services.audio.play(Sfx.lose, volume: 0.6);
       services.haptics.heavy();
       _analyseRescue();
@@ -231,30 +228,20 @@ class GameController extends ChangeNotifier {
     services.save.clearAttempt(mode.key);
     services.audio.play(Sfx.win);
     if (mode == PuzzleMode.levels) {
-      stars = starsFor(
-        usedBoosters: engine.boosters.anyUsed,
-        peakRest: engine.peakRest,
-        minRest: puzzle.profile?.minRestDepth ?? engine.peakRest,
-      );
+      stars = services.economy.stars.starsFor(won: true, helps: engine.boosters.helps);
       reward = services.player.recordLevelWin(level: puzzle.levelNumber ?? 1, stars: stars, totalLevels: services.levels.total);
       services.levels.ensureAhead(services.player.progress.highestUnlocked);
     } else {
-      final r = run;
-      reward = services.player.recordChallengeWin(tier: puzzle.challengeTier ?? 1, seed: puzzle.seed ?? 0);
-      if (r != null) {
-        final tier = puzzle.challengeTier ?? r.tier;
-        r.advance(ChallengeDirector.freshSeed(DateTime.now().microsecondsSinceEpoch & 0xFFFFFFFF, r.solved + 1), puzzle.layout.fingerprint());
-        scoring = true;
-        _grading.then((_) {
-          final points = sheet?.pointsFor(tier) ?? 0;
-          puzzlePoints = points;
-          r.score += points;
-          services.save.saveChallengeRun(r);
-          newBest = services.player.recordRunScore(r.score, tier);
-          scoring = false;
-          _notify();
-        });
-      }
+      // The board's points wait for the last grades, then join the run total.
+      final board = puzzle.boardNumber ?? 1;
+      scoring = true;
+      _grading.then((_) async {
+        final points = sheet?.pointsFor(EndlessDirector.basePoints(board)) ?? 0;
+        puzzlePoints = points;
+        boardCoins = await services.endless.clearBoard(puzzle, points, services.player);
+        scoring = false;
+        _notify();
+      });
     }
   }
 
@@ -277,10 +264,16 @@ class GameController extends ChangeNotifier {
     _notify();
   }
 
-  /// Ends a lost challenge run (or abandons a lost level attempt).
-  void abandon() {
-    services.save.clearAttempt(mode.key);
-    if (mode == PuzzleMode.challenge) services.save.clearChallengeRun();
+  /// Abandons a lost level attempt.
+  void abandon() => services.save.clearAttempt(mode.key);
+
+  /// Ends the endless run after a lost board: the total is recorded against
+  /// the record and the run is closed.
+  Future<RunSummary> finishRun() async {
+    final summary = runSummary ?? await services.endless.finishRun(services.player);
+    runSummary = summary;
+    _notify();
+    return summary;
   }
 
   BoosterResult _mapAd(AdOutcome o) => switch (o) {

@@ -4,16 +4,11 @@
   "rewards": {
     "levelFirstClear": 1,
     "threeStarBonus": 1,
-    "challengeBase": 1,
-    "challengeEvery": 3
+    "endlessEvery": 3
   },
-  "xp": {
-    "level": 20,
-    "star": 10,
-    "challenge": 25,
-    "challengeTier": 5,
-    "base": 100,
-    "growth": 1.12
+  "stars": {
+    "helpsFor3": 0,
+    "helpsFor2": 1
   },
   "boosters": {
     "extraSlot": { "coins": 1, "ad": true, "slots": 1 },

@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 
-import '../../core/challenge/challenge_system.dart';
 import '../../core/model/puzzle_definition.dart';
 import '../../services/app_services.dart';
 import '../../ui/kit/glyphs.dart';
 import '../../ui/kit/widgets.dart';
 import '../../ui/kit/world_objects.dart';
-import '../challenge/challenge_screen.dart';
+import '../endless/endless_screen.dart';
 import '../game/game_screen.dart';
 import '../guide/guide_screen.dart';
 import '../levels/levels_map_screen.dart';
@@ -27,13 +26,13 @@ PageRoute<T> portalRoute<T>(Widget page) => PageRouteBuilder<T>(
       },
     );
 
-Widget gameScreenFor(PuzzleDefinition puzzle, {ChallengeRun? run}) => GameScreen(puzzle: puzzle, run: run);
+Widget gameScreenFor(PuzzleDefinition puzzle) => GameScreen(puzzle: puzzle);
 
 void openHome(BuildContext context) => Navigator.of(context).popUntil((r) => r.isFirst);
 
 void openLevels(BuildContext context) => Navigator.push(context, portalRoute(const LevelsMapScreen()));
 
-void openChallenge(BuildContext context) => Navigator.push(context, portalRoute(const ChallengeScreen()));
+void openEndless(BuildContext context) => Navigator.push(context, portalRoute(const EndlessScreen()));
 
 void openSettings(BuildContext context) => Navigator.push(context, portalRoute(const SettingsScreen()));
 
@@ -95,54 +94,46 @@ Future<PuzzleDefinition?> _withForging(BuildContext context, int level) async {
   return puzzle;
 }
 
-/// Continues the saved challenge, or forges the puzzle of the run's tier.
-Future<void> launchChallenge(BuildContext context, {required bool resume, bool replace = false}) async {
+/// Continues the endless run — its saved board, or the run's next board — or
+/// starts a fresh run. Boards are prepared ahead in the background, so they
+/// usually open at once; a short "preparing" note shows only when a board is
+/// still being made.
+Future<void> launchEndless(BuildContext context, {required bool fresh, bool replace = false}) async {
   final s = Services.of(context, listen: false);
-  final now = DateTime.now().microsecondsSinceEpoch & 0xFFFFFFFF;
-  var run = await s.save.loadChallengeRun();
-  if (!resume || run == null) {
-    if (!replace || run == null) {
-      run = ChallengeRun.fresh(ChallengeDirector.freshSeed(now, 1));
-      await s.save.clearAttempt(PuzzleMode.challenge.key);
-    }
-  }
-  if (resume) {
-    final saved = await s.save.loadAttempt(PuzzleMode.challenge.key);
-    if (saved != null && context.mounted) {
-      final route = portalRoute<void>(GameScreen(puzzle: saved.puzzle, resume: saved, run: run));
+  final run = fresh ? await s.endless.startRun() : (await s.endless.load() ?? await s.endless.startRun());
+  if (!fresh) {
+    final saved = await s.save.loadAttempt(PuzzleMode.endless.key);
+    if (saved != null && saved.puzzle.boardNumber == run.board && context.mounted) {
+      final route = portalRoute<void>(GameScreen(puzzle: saved.puzzle, resume: saved));
       replace ? await Navigator.pushReplacement(context, route) : await Navigator.push(context, route);
       return;
     }
   }
-  await s.save.saveChallengeRun(run);
   if (!context.mounted) return;
   final nav = Navigator.of(context);
-  final forging = showStoneDialog<void>(
-    context,
-    dismissible: false,
-    builder: (context) => Column(mainAxisSize: MainAxisSize.min, children: [
-      SizedBox(width: 120, height: 120, child: Loop(period: const Duration(seconds: 3), builder: (context, ph) => CustomPaint(painter: CrystalPainter(s.theme.tokens, ph)))),
-      const SizedBox(height: 10),
-      Text(s.i18n.t('challenge.generating'), textAlign: TextAlign.center, style: UiText.style(context, size: 16)),
-    ]),
-  );
-  PuzzleDefinition? puzzle;
-  var seed = run.seed;
-  for (var attempt = 0; attempt < 4 && puzzle == null; attempt++) {
-    final generated = await s.compute.run(s.challenges.jobFor(run.tier, seed), units: 1);
-    if (generated != null && !run.recent.contains(generated.layout.fingerprint())) {
-      puzzle = s.challenges.toPuzzle(generated, tier: run.tier, seed: seed);
-    } else {
-      seed = ChallengeDirector.freshSeed(seed, attempt + 7);
-    }
+  final pending = s.endless.board(run.board);
+  final ready = await Future.any([
+    pending.then((_) => true),
+    Future<bool>.delayed(const Duration(milliseconds: 150), () => false),
+  ]);
+  Future<void>? note;
+  if (!ready && context.mounted) {
+    note = showStoneDialog<void>(
+      context,
+      dismissible: false,
+      builder: (context) => Column(mainAxisSize: MainAxisSize.min, children: [
+        SizedBox(width: 120, height: 120, child: Loop(period: const Duration(seconds: 3), builder: (context, ph) => CustomPaint(painter: CrystalPainter(s.theme.tokens, ph)))),
+        const SizedBox(height: 10),
+        Text(s.i18n.t('endless.generating'), textAlign: TextAlign.center, style: UiText.style(context, size: 16)),
+      ]),
+    );
   }
-  run.seed = seed;
-  if (puzzle != null) run.remember(puzzle.layout.fingerprint());
-  await s.save.saveChallengeRun(run);
-  if (!nav.mounted) return;
-  nav.pop();
-  await forging;
+  final puzzle = await pending;
+  if (note != null && nav.mounted) {
+    nav.pop();
+    await note;
+  }
   if (puzzle == null || !nav.mounted) return;
-  final route = portalRoute<void>(GameScreen(puzzle: puzzle, run: run));
+  final route = portalRoute<void>(GameScreen(puzzle: puzzle));
   replace ? await nav.pushReplacement(route) : await nav.push(route);
 }

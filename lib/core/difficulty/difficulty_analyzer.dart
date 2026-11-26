@@ -37,7 +37,7 @@ class AnalyzerConfig {
   /// Budget for counting winning orders (uniqueness).
   final int countBudget;
 
-  /// Light settings for on-device generation (challenges).
+  /// Light settings for on-device generation (endless boards).
   static const AnalyzerConfig quick = AnalyzerConfig(
     proofBudgets: <int, int>{2: 6000, 3: 30000, 4: 90000, 5: 150000},
     branchBudget: 15000,

@@ -30,7 +30,7 @@ class RuleDefinition {
     this.sumTarget = 10,
     this.color = ColorCondition.any,
     this.order = OrderCondition.any,
-    this.modes = const <String>{'levels', 'challenge'},
+    this.modes = const <String>{'levels', 'endless'},
     this.minLevel = 1,
     this.maxLevel,
     this.demo = const <TileSpec>[],
@@ -48,7 +48,7 @@ class RuleDefinition {
       color: _byName(ColorCondition.values, json['color'], ColorCondition.any),
       order: _byName(OrderCondition.values, json['order'], OrderCondition.any),
       modes: readStringList(json['modes']).isEmpty
-          ? const <String>{'levels', 'challenge'}
+          ? const <String>{'levels', 'endless'}
           : readStringList(json['modes']).toSet(),
       minLevel: readInt(json['minLevel'], 1),
       maxLevel: readIntOrNull(json['maxLevel']),
@@ -71,7 +71,7 @@ class RuleDefinition {
   final ColorCondition color;
   final OrderCondition order;
 
-  /// Play modes where the rule is active (`levels`, `challenge`).
+  /// Play modes where the rule is active (`levels`, `endless`).
   final Set<String> modes;
   final int minLevel;
   final int? maxLevel;

@@ -2,7 +2,7 @@ import 'dart:async';
 
 import '../core/jobs/compute_job.dart';
 
-/// Runs heavy jobs (hints, rescue checks, challenge generation) in short
+/// Runs heavy jobs (hints, rescue checks, endless boards) in short
 /// slices between frames, so animations stay smooth on every platform —
 /// including the web, which has no background isolates.
 class ComputeScheduler {

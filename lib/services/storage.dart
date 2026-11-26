@@ -7,6 +7,9 @@ abstract interface class KeyValueStore {
   Future<String?> read(String key);
   Future<void> write(String key, String value);
   Future<void> remove(String key);
+
+  /// Every key currently stored (used to clear retired data).
+  Future<Set<String>> keys();
 }
 
 class PrefsStore implements KeyValueStore {
@@ -24,6 +27,9 @@ class PrefsStore implements KeyValueStore {
 
   @override
   Future<void> remove(String key) => _prefs.remove(key);
+
+  @override
+  Future<Set<String>> keys() async => _prefs.getKeys();
 }
 
 class MemoryStore implements KeyValueStore {
@@ -37,4 +43,7 @@ class MemoryStore implements KeyValueStore {
 
   @override
   Future<void> remove(String key) async => data.remove(key);
+
+  @override
+  Future<Set<String>> keys() async => data.keys.toSet();
 }

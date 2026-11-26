@@ -1,7 +1,8 @@
 import 'dart:convert';
 
-import '../core/challenge/challenge_system.dart';
 import '../core/economy/wallet.dart';
+import '../core/endless/endless_run.dart';
+import '../core/endless/endless_stats.dart';
 import '../core/engine/game_engine.dart';
 import '../core/levels/level_progress.dart';
 import '../core/util/json_read.dart';
@@ -60,20 +61,53 @@ class GameSettings {
       };
 }
 
-/// Everything persisted, one JSON document per key.
+/// Everything persisted, one JSON document per key (save schema v3).
 class SaveSystem {
   SaveSystem(this.store);
 
   final KeyValueStore store;
 
+  /// The save layout this build writes.
+  static const int schema = 3;
+
+  static const String schemaKey = 'un.schema';
   static const String profileKey = 'un.profile';
   static const String settingsKey = 'un.settings';
-  static const String progressKey = 'un.progress';
   static const String walletKey = 'un.wallet';
-  static const String playerKey = 'un.player';
-  static const String challengeRunKey = 'un.challenge.run';
 
+  /// Level progress: `{"highest":27,"stars":{"1":3,"2":2}}`.
+  static const String levelsKey = 'un.levels';
+
+  /// The endless run in progress: `{"seed":"9f2c41d0","board":7,"score":2310,…}`.
+  static const String endlessRunKey = 'un.endless.run';
+
+  /// Endless records: `{"best":4820,"bestBoards":17,"last":1290,"lastBoards":6,"runs":23}`.
+  static const String endlessStatsKey = 'un.endless.stats';
+
+  /// Recent run seeds, so a new run never repeats one: `{"seeds":["9f2c41d0",…]}`.
+  static const String endlessSeedsKey = 'un.endless.seeds';
+  static const int seedMemory = 50;
+
+  /// The unfinished board of a mode (`levels` or `endless`).
   static String attemptKey(String mode) => 'un.attempt.$mode';
+
+  /// Brings an older save up to [schema]. Run once at start, before loading.
+  ///
+  /// v2 → v3: the arrow rule changed every level, so level progress starts
+  /// over; challenge data is retired (the endless mode replaces it); coins,
+  /// profile and settings are kept.
+  Future<void> migrate({required int levelCacheVersion}) async {
+    final from = readInt(await store.read(schemaKey));
+    if (from >= schema) return;
+    for (final key in const ['un.progress', 'un.player', 'un.challenge.run', 'un.attempt.levels', 'un.attempt.challenge']) {
+      await store.remove(key);
+    }
+    final current = 'un.level.v$levelCacheVersion.';
+    for (final key in await store.keys()) {
+      if (key.startsWith('un.level.v') && !key.startsWith(current)) await store.remove(key);
+    }
+    await store.write(schemaKey, '$schema');
+  }
 
   Future<Map<String, Object?>?> _read(String key) async {
     final raw = await store.read(key);
@@ -93,8 +127,8 @@ class SaveSystem {
   Future<GameSettings> loadSettings() async => GameSettings.fromJson(await _read(settingsKey) ?? const {});
   Future<void> saveSettings(GameSettings s) => _write(settingsKey, s.toJson());
 
-  Future<LevelProgress> loadProgress() async => LevelProgress.fromJson(await _read(progressKey) ?? const {});
-  Future<void> saveProgress(LevelProgress p) => _write(progressKey, p.toJson());
+  Future<LevelProgress> loadProgress() async => LevelProgress.fromJson(await _read(levelsKey) ?? const {});
+  Future<void> saveProgress(LevelProgress p) => _write(levelsKey, p.toJson());
 
   Future<Wallet?> loadWallet() async {
     final json = await _read(walletKey);
@@ -103,11 +137,7 @@ class SaveSystem {
 
   Future<void> saveWallet(Wallet w) => _write(walletKey, w.toJson());
 
-  /// XP and records: `{"xp":640,"best":1280,"bestTier":7,"solved":23}`.
-  Future<Map<String, Object?>> loadPlayer() async => await _read(playerKey) ?? const <String, Object?>{};
-  Future<void> savePlayer(Map<String, Object?> json) => _write(playerKey, json);
-
-  /// The unfinished attempt of a mode (`levels` or `challenge`).
+  /// The unfinished board of a mode (`levels` or `endless`).
   Future<GameSnapshot?> loadAttempt(String mode) async {
     final json = await _read(attemptKey(mode));
     if (json == null) return null;
@@ -121,11 +151,27 @@ class SaveSystem {
   Future<void> saveAttempt(String mode, GameSnapshot snapshot) => _write(attemptKey(mode), snapshot.toJson());
   Future<void> clearAttempt(String mode) => store.remove(attemptKey(mode));
 
-  Future<ChallengeRun?> loadChallengeRun() async {
-    final json = await _read(challengeRunKey);
-    return json == null ? null : ChallengeRun.fromJson(json);
+  Future<EndlessRun?> loadEndlessRun() async {
+    final json = await _read(endlessRunKey);
+    return json == null ? null : EndlessRun.fromJson(json);
   }
 
-  Future<void> saveChallengeRun(ChallengeRun run) => _write(challengeRunKey, run.toJson());
-  Future<void> clearChallengeRun() => store.remove(challengeRunKey);
+  Future<void> saveEndlessRun(EndlessRun run) => _write(endlessRunKey, run.toJson());
+  Future<void> clearEndlessRun() => store.remove(endlessRunKey);
+
+  Future<EndlessStats> loadEndlessStats() async => EndlessStats.fromJson(await _read(endlessStatsKey) ?? const {});
+  Future<void> saveEndlessStats(EndlessStats stats) => _write(endlessStatsKey, stats.toJson());
+
+  Future<List<int>> loadEndlessSeeds() async => [
+        for (final s in readStringList((await _read(endlessSeedsKey))?['seeds']))
+          if (int.tryParse(s, radix: 16) case final v?) v,
+      ];
+
+  /// Keeps the last [seedMemory] run seeds.
+  Future<void> saveEndlessSeeds(List<int> seeds) {
+    final keep = seeds.length > seedMemory ? seeds.sublist(seeds.length - seedMemory) : seeds;
+    return _write(endlessSeedsKey, {
+      'seeds': [for (final s in keep) EndlessRun.seedText(s)],
+    });
+  }
 }

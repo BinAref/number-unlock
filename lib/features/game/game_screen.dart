@@ -3,7 +3,6 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
 
-import '../../core/challenge/challenge_system.dart';
 import '../../core/engine/game_engine.dart';
 import '../../core/model/puzzle_definition.dart';
 import '../../services/app_services.dart';
@@ -69,11 +68,10 @@ class GameLayout {
 }
 
 class GameScreen extends StatefulWidget {
-  const GameScreen({super.key, required this.puzzle, this.resume, this.run});
+  const GameScreen({super.key, required this.puzzle, this.resume});
 
   final PuzzleDefinition puzzle;
   final GameSnapshot? resume;
-  final ChallengeRun? run;
 
   @override
   State<GameScreen> createState() => _GameScreenState();
@@ -86,7 +84,7 @@ class _GameScreenState extends State<GameScreen> {
   @override
   void initState() {
     super.initState();
-    game = GameController(services: Services.of(context, listen: false), puzzle: widget.puzzle, resume: widget.resume, run: widget.run)
+    game = GameController(services: Services.of(context, listen: false), puzzle: widget.puzzle, resume: widget.resume)
       ..onMessage = (key, [args = const {}]) {
         if (mounted) showToast(context, Services.of(context, listen: false).i18n.t(key, args));
       }
@@ -303,7 +301,9 @@ class _Header extends StatelessWidget {
     final s = Services.of(context);
     final i18n = s.i18n;
     final p = game.puzzle;
-    final label = p.mode == PuzzleMode.levels ? i18n.t('game.level', {'n': p.levelNumber}) : i18n.t('challenge.label', {'n': p.challengeTier});
+    final endless = p.mode == PuzzleMode.endless;
+    final label = endless ? i18n.t('endless.label', {'n': p.boardNumber}) : i18n.t('game.level', {'n': p.levelNumber});
+    final runScore = endless ? s.endless.run?.score : null;
     final tier = p.profile?.tier.name;
     return SafeArea(
       bottom: false,
@@ -321,8 +321,8 @@ class _Header extends StatelessWidget {
                   Expanded(
                     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                       Text(label, style: UiText.style(context, size: 19), overflow: TextOverflow.ellipsis),
-                      if (game.run != null)
-                        Text(i18n.t('challenge.score', {'n': game.run!.score}), style: UiText.numbers(context, size: 12, color: s.theme.tokens.color('text.accent')))
+                      if (runScore != null)
+                        Text(i18n.t('endless.score', {'n': runScore}), style: UiText.numbers(context, size: 12, color: s.theme.tokens.color('text.accent')))
                       else if (tier != null)
                         Text(i18n.t('difficulty.$tier'), style: UiText.style(context, size: 12, color: s.theme.tokens.color('text.accent'))),
                     ]),

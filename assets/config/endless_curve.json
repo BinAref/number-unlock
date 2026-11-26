@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "baseSeed": 0,
+  "boards": [
+    { "from": 1, "to": 2, "grids": [[3, 3], [3, 4]], "depth": [1, 2], "complement": [0.3, 0.4], "colors": [4, 5],
+      "peel": ["mixed"], "climb": [0.4, 0.5], "score": [6, 14], "width": 14, "attempts": 4, "entrances": 2,
+      "arrows": { "max": 1, "two": 0, "star": 0, "decoy": 0, "branch": 0.3 } },
+    { "from": 3, "to": 5, "grids": [[3, 4], [4, 4]], "depth": [2, 2], "complement": [0.4, 0.5], "colors": 5,
+      "peel": ["mixed"], "climb": [0.5, 0.6], "spread": [0.0, 0.2], "score": [14, 24], "width": 14, "attempts": 4, "entrances": 2,
+      "arrows": { "max": 2, "two": [0.3, 0.4], "star": 0, "decoy": [0.1, 0.2], "branch": [0.4, 0.45] } },
+    { "from": 6, "to": 9, "grids": [[4, 4], [4, 5]], "depth": [2, 3], "complement": [0.5, 0.6], "colors": [5, 6],
+      "peel": ["mixed", "deep"], "climb": [0.6, 0.7], "spread": [0.3, 0.6], "harden": [80, 140], "score": [22, 34], "width": 14,
+      "attempts": 4, "entrances": 2,
+      "arrows": { "max": 2, "two": 0.35, "star": [0.3, 0.35], "decoy": [0.2, 0.3], "branch": [0.4, 0.45] } },
+    { "from": 10, "to": 15, "grids": [[5, 5], [5, 6]], "holes": [0.05, 0.1], "depth": [3, 3], "floor": [0, 1],
+      "complement": [0.6, 0.7], "colors": [6, 7], "peel": ["deep", "mixed"], "climb": [0.7, 0.8], "spread": [0.6, 0.9],
+      "harden": [160, 220], "score": [34, 50], "width": 16, "attempts": 4, "entrances": 2,
+      "arrows": { "max": 2, "two": [0.2, 0.15], "star": [0.35, 0.4], "decoy": 0.3, "branch": [0.3, 0.25] } },
+    { "from": 16, "to": 25, "grids": [[6, 6], [6, 7]], "holes": [0.1, 0.15], "depth": [3, 4], "floor": [1, 2],
+      "complement": [0.65, 0.75], "colors": 7, "peel": ["deep"], "climb": [0.8, 0.9], "spread": [0.8, 1.0],
+      "harden": [220, 260], "score": [48, 66], "width": 16, "attempts": 3, "entrances": 2,
+      "arrows": { "max": 2, "two": [0.15, 0.12], "star": 0.4, "decoy": [0.35, 0.4], "branch": [0.25, 0.2] } },
+    { "from": 26, "to": 40, "grids": [[7, 7], [7, 8]], "holes": [0.15, 0.2], "depth": 4, "floor": 2,
+      "complement": [0.7, 0.8], "colors": [7, 8], "peel": ["deep"], "climb": [0.85, 0.9], "spread": 1.0,
+      "harden": [240, 260], "score": [62, 82], "width": 18, "attempts": 3, "entrances": 2,
+      "arrows": { "max": 2, "two": 0.1, "star": [0.4, 0.45], "decoy": 0.4, "branch": [0.2, 0.18] } },
+    { "from": 41, "to": 60, "grids": [[8, 8]], "holes": [0.2, 0.25], "depth": 4, "floor": [2, 3],
+      "complement": [0.75, 0.85], "colors": 8, "peel": ["deep"], "climb": 0.9, "spread": 1.0,
+      "harden": 260, "score": [76, 92], "width": 18, "attempts": 3, "entrances": 2,
+      "arrows": { "max": 2, "two": 0.1, "star": 0.45, "decoy": 0.45, "branch": 0.16 } }
+  ]
+}

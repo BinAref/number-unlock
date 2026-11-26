@@ -1,6 +1,6 @@
 /// A long computation that can be advanced a slice at a time.
 ///
-/// Hints, rescue analysis and challenge generation implement this, so the
+/// Hints, rescue analysis and board generation implement this, so the
 /// app can run them in small slices between frames (the web has no
 /// background isolates) while tools and tests simply run them to the end.
 abstract interface class ComputeJob<T> {

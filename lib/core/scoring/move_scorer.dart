@@ -18,16 +18,15 @@ enum MoveGrade {
   fatal,
 }
 
-/// The score of one challenge puzzle: perfect picks earn full points, every
-/// departure from the best path costs some, boosters trim the total, and a
-/// lost puzzle earns nothing.
+/// The quality of one board's play: perfect picks count fully, every
+/// departure from the best path costs some, help trims the total, and a lost
+/// board earns nothing.
 class ScoreSheet {
   final List<MoveGrade> grades = [];
   bool usedSlot = false;
   bool usedSwap = false;
 
-  static int basePoints(int tier) => 100 + 20 * (tier - 1);
-
+  /// 0..1: the share of perfect play, reduced by the boosters used.
   double get quality {
     if (grades.isEmpty) return 0;
     var sum = 0.0;
@@ -45,13 +44,14 @@ class ScoreSheet {
     return q;
   }
 
-  int pointsFor(int tier) => (basePoints(tier) * quality).round();
+  /// The points a cleared board worth [base] earns.
+  int pointsFor(int base) => (base * quality).round();
 }
 
 /// Grades picks with the real solver, reusing what it learned across the
-/// picks of one puzzle.
-class ChallengeScorer {
-  ChallengeScorer(this.ctx);
+/// picks of one board.
+class MoveScorer {
+  MoveScorer(this.ctx);
 
   final SolverContext ctx;
   final Map<int, StateSet> _failures = {};
@@ -71,7 +71,7 @@ class _GradeJob implements ComputeJob<MoveGrade> {
     _search = _start(removed, tray, _limit);
   }
 
-  final ChallengeScorer s;
+  final MoveScorer s;
   final List<int> removed;
   final List<int> tray;
   final int move;

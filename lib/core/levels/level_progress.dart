@@ -14,14 +14,6 @@ class LevelCompletion {
   bool get improved => stars > previousStars;
 }
 
-/// Stars: three for a booster-free win that never kept more tiles waiting
-/// than the puzzle strictly needs, two for any booster-free win, one when
-/// boosters helped.
-int starsFor({required bool usedBoosters, required int peakRest, required int minRest}) {
-  if (usedBoosters) return 1;
-  return peakRest <= minRest ? 3 : 2;
-}
-
 /// Completed levels, their best stars and how far the player has unlocked.
 class LevelProgress {
   LevelProgress({Map<int, int>? stars, this.highestUnlocked = 1}) : stars = stars ?? <int, int>{};
@@ -46,6 +38,14 @@ class LevelProgress {
   int get completedCount => stars.length;
 
   int get totalStars => stars.values.fold(0, (a, b) => a + b);
+
+  /// Levels finished with all three stars.
+  int get threeStarCount => stars.values.where((s) => s >= 3).length;
+
+  /// Progress through the levels as mastery, 0..1: the stars earned out of
+  /// all the stars the completed levels can give (the journey never ends,
+  /// so a share of levels completed would mean nothing).
+  double get mastery => completedCount == 0 ? 0 : totalStars / (3 * completedCount);
 
   /// The level the play button continues with.
   int currentLevel(int total) => highestUnlocked.clamp(1, total);

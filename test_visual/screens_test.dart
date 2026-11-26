@@ -7,7 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unlock_numbers/app.dart';
-import 'package:unlock_numbers/features/challenge/challenge_screen.dart';
+import 'package:unlock_numbers/features/endless/endless_screen.dart';
 import 'package:unlock_numbers/features/game/game_screen.dart';
 import 'package:unlock_numbers/features/guide/guide_screen.dart';
 import 'package:unlock_numbers/features/levels/levels_map_screen.dart';
@@ -41,8 +41,9 @@ void main() {
     Future<void> shot(String name, {required String lang, required String theme, Widget? home, int highest = 37}) async {
       final store = MemoryStore()
         ..data['un.settings'] = '{"language":"$lang","theme":"$theme"}'
-        ..data['un.progress'] = '{"stars":{${List.generate(highest - 1, (i) => '"${i + 1}":${1 + i % 3}').join(',')}},"highest":$highest}'
-        ..data['un.player'] = '{"xp":640}'
+        ..data['un.schema'] = '3'
+        ..data['un.levels'] = '{"stars":{${List.generate(highest - 1, (i) => '"${i + 1}":${1 + i % 3}').join(',')}},"highest":$highest}'
+        ..data['un.endless.stats'] = '{"best":4820,"bestBoards":17,"last":1290,"lastBoards":6,"runs":23}'
         ..data['un.profile'] = '{"name":"Aref","avatar":2}';
       final s = (await tester.runAsync(() => AppServices.bootstrap(store: store, audio: false)))!;
       await tester.pumpWidget(UnlockNumbersApp(services: s, home: home));
@@ -66,6 +67,6 @@ void main() {
     await shot('settings_night_tr', lang: 'tr', theme: 'night', home: const SettingsScreen());
     await shot('shop_day_ar', lang: 'ar', theme: 'day', home: const ShopScreen());
     await shot('guide_night_en', lang: 'en', theme: 'night', home: const GuideScreen());
-    await shot('challenge_day_ar', lang: 'ar', theme: 'day', home: const ChallengeScreen());
+    await shot('endless_day_ar', lang: 'ar', theme: 'day', home: const EndlessScreen());
   });
 }

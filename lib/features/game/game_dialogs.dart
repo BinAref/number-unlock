@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/boosters/booster_system.dart';
+import '../../core/endless/endless_stats.dart';
 import '../../core/engine/game_engine.dart';
 import '../../core/model/puzzle_definition.dart';
 import '../../services/app_services.dart';
@@ -113,12 +114,15 @@ Future<void> showPauseDialog(BuildContext context, GameController game) {
     title: i18n.t('game.paused'),
     builder: (context) => Column(mainAxisSize: MainAxisSize.min, children: [
       StoneButton(label: i18n.t('game.resume'), glyph: Glyph.play, primary: true, onTap: () => Navigator.pop(context)),
-      const SizedBox(height: 10),
-      StoneButton(label: i18n.t('game.restart'), glyph: Glyph.restart, onTap: () {
-        Navigator.pop(context);
-        s.save.clearAttempt(game.mode.key);
-        Navigator.pushReplacement(context, portalRoute(gameScreenFor(game.puzzle, run: game.run)));
-      }),
+      // An endless board cannot be restarted: one try per board.
+      if (game.mode == PuzzleMode.levels) ...[
+        const SizedBox(height: 10),
+        StoneButton(label: i18n.t('game.restart'), glyph: Glyph.restart, onTap: () {
+          Navigator.pop(context);
+          s.save.clearAttempt(game.mode.key);
+          Navigator.pushReplacement(context, portalRoute(gameScreenFor(game.puzzle)));
+        }),
+      ],
       const SizedBox(height: 10),
       StoneButton(label: i18n.t('game.quit'), glyph: Glyph.home, onTap: () {
         Navigator.pop(context);
@@ -154,74 +158,49 @@ class _QuickToggle extends StatelessWidget {
 }
 
 Future<void> showWinDialog(BuildContext context, GameController game) {
+  if (game.mode == PuzzleMode.endless) return _showBoardCleared(context, game);
   final s = Services.of(context, listen: false);
   final i18n = s.i18n;
   final t = s.theme.tokens;
   final reward = game.reward;
-  final levels = game.mode == PuzzleMode.levels;
   final level = game.puzzle.levelNumber ?? 1;
   return showStoneDialog<void>(
     context,
     title: i18n.t('win.title'),
     dismissible: false,
     builder: (context) => Column(mainAxisSize: MainAxisSize.min, children: [
-      if (levels) ...[
-        TweenAnimationBuilder<double>(
-          tween: Tween(begin: 0, end: 1),
-          duration: const Duration(milliseconds: 900),
-          curve: Curves.elasticOut,
-          builder: (context, v, child) => Transform.scale(scale: 0.4 + 0.6 * v, child: child),
-          child: StarRow(stars: game.stars, size: 46),
-        ),
-        if (game.stars == 3) Text(i18n.t('win.perfect'), style: UiText.style(context, size: 16, color: t.color('text.accent'))),
-      ] else
-        ListenableBuilder(
-          listenable: game,
-          builder: (context, _) => Column(children: [
-            if (game.scoring)
-              Text(i18n.t('challenge.counting'), style: UiText.style(context, size: 15, color: t.color('text.muted')))
-            else ...[
-              Text(i18n.t('challenge.points', {'n': game.puzzlePoints ?? 0}), style: UiText.numbers(context, size: 26, color: t.color('text.accent'))),
-              Text(i18n.t('challenge.accuracy', {'p': ((game.sheet?.quality ?? 0) * 100).round()}), style: UiText.style(context, size: 14)),
-              Text(i18n.t('challenge.runTotal', {'n': game.run?.score ?? 0}), style: UiText.numbers(context, size: 16)),
-              if (game.newBest) Text(i18n.t('challenge.newBest'), style: UiText.style(context, size: 16, color: t.color('ui.success'))),
-            ],
-          ]),
-        ),
+      TweenAnimationBuilder<double>(
+        tween: Tween(begin: 0, end: 1),
+        duration: const Duration(milliseconds: 900),
+        curve: Curves.elasticOut,
+        builder: (context, v, child) => Transform.scale(scale: 0.4 + 0.6 * v, child: child),
+        child: StarRow(stars: game.stars, size: 46),
+      ),
+      if (game.stars == 3) Text(i18n.t('win.perfect'), style: UiText.style(context, size: 16, color: t.color('text.accent'))),
       const SizedBox(height: 12),
-      if (reward != null)
+      if (reward != null && reward.coins > 0)
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          if (reward.coins > 0) ...[
-            TweenAnimationBuilder<int>(
-              tween: IntTween(begin: 0, end: reward.coins),
-              duration: s.motion('coinFly'),
-              builder: (context, v, _) => Text(i18n.t('win.reward', {'n': v}), style: UiText.numbers(context, size: 24, color: t.color('text.accent'))),
-            ),
-            const SizedBox(width: 4),
-            const GlyphIcon(Glyph.sparkle, size: 18),
-            const SizedBox(width: 16),
-          ],
-          Text(i18n.t('win.xp', {'n': reward.xp}), style: UiText.numbers(context, size: 18, color: t.color('ui.focus'))),
+          TweenAnimationBuilder<int>(
+            tween: IntTween(begin: 0, end: reward.coins),
+            duration: s.motion('coinFly'),
+            builder: (context, v, _) => Text(i18n.t('win.reward', {'n': v}), style: UiText.numbers(context, size: 24, color: t.color('text.accent'))),
+          ),
+          const SizedBox(width: 4),
+          const GlyphIcon(Glyph.sparkle, size: 18),
         ]),
       const SizedBox(height: 18),
-      if (levels) ...[
-        if (level < s.levels.total)
-          StoneButton(label: i18n.t('win.next'), primary: true, glyph: Glyph.arrowRight, onTap: () {
-            Navigator.pop(context);
-            playLevel(context, level + 1, replace: true, askResume: false);
-          })
-        else
-          Text(i18n.t('win.allDone'), textAlign: TextAlign.center, style: UiText.style(context, size: 15)),
-        const SizedBox(height: 10),
-        StoneButton(label: i18n.t('win.replay'), glyph: Glyph.restart, onTap: () {
+      if (level < s.levels.total)
+        StoneButton(label: i18n.t('win.next'), primary: true, glyph: Glyph.arrowRight, onTap: () {
           Navigator.pop(context);
-          Navigator.pushReplacement(context, portalRoute(gameScreenFor(game.puzzle)));
-        }),
-      ] else
-        StoneButton(label: i18n.t('win.challengeNext'), primary: true, glyph: Glyph.arrowRight, onTap: () {
-          Navigator.pop(context);
-          launchChallenge(context, resume: false, replace: true);
-        }),
+          playLevel(context, level + 1, replace: true, askResume: false);
+        })
+      else
+        Text(i18n.t('win.allDone'), textAlign: TextAlign.center, style: UiText.style(context, size: 15)),
+      const SizedBox(height: 10),
+      StoneButton(label: i18n.t('win.replay'), glyph: Glyph.restart, onTap: () {
+        Navigator.pop(context);
+        Navigator.pushReplacement(context, portalRoute(gameScreenFor(game.puzzle)));
+      }),
       const SizedBox(height: 10),
       StoneButton(label: i18n.t('common.home'), glyph: Glyph.home, dense: true, onTap: () {
         Navigator.pop(context);
@@ -231,10 +210,123 @@ Future<void> showWinDialog(BuildContext context, GameController game) {
   );
 }
 
+/// An endless board is cleared: its points are counted, added to the run
+/// total, and the next board follows on its own after a short moment — the
+/// run feels like one continuous journey, never a return to a menu.
+Future<void> _showBoardCleared(BuildContext context, GameController game) {
+  final s = Services.of(context, listen: false);
+  return showStoneDialog<void>(
+    context,
+    title: s.i18n.t('endless.board', {'n': game.puzzle.boardNumber ?? 1}),
+    dismissible: false,
+    builder: (dialogContext) => _BoardCleared(
+      game: game,
+      onDone: () {
+        Navigator.pop(dialogContext);
+        launchEndless(context, fresh: false, replace: true);
+      },
+    ),
+  );
+}
+
+class _BoardCleared extends StatefulWidget {
+  const _BoardCleared({required this.game, required this.onDone});
+
+  final GameController game;
+  final VoidCallback onDone;
+
+  @override
+  State<_BoardCleared> createState() => _BoardClearedState();
+}
+
+class _BoardClearedState extends State<_BoardCleared> {
+  bool _scheduled = false;
+
+  @override
+  void initState() {
+    super.initState();
+    widget.game.addListener(_check);
+    _check();
+  }
+
+  @override
+  void dispose() {
+    widget.game.removeListener(_check);
+    super.dispose();
+  }
+
+  void _check() {
+    if (_scheduled || widget.game.scoring) return;
+    _scheduled = true;
+    Future<void>.delayed(const Duration(milliseconds: 1200), () {
+      if (mounted) widget.onDone();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = Services.of(context, listen: false);
+    final i18n = s.i18n;
+    final t = s.theme.tokens;
+    final game = widget.game;
+    return ListenableBuilder(
+      listenable: game,
+      builder: (context, _) => Column(mainAxisSize: MainAxisSize.min, children: [
+        if (game.scoring)
+          Text(i18n.t('endless.counting'), style: UiText.style(context, size: 15, color: t.color('text.muted')))
+        else ...[
+          Text(i18n.t('endless.points', {'n': game.puzzlePoints ?? 0}), style: UiText.numbers(context, size: 26, color: t.color('text.accent'))),
+          Text(i18n.t('endless.accuracy', {'p': ((game.sheet?.quality ?? 0) * 100).round()}), style: UiText.style(context, size: 14)),
+          Text(i18n.t('endless.runTotal', {'n': s.endless.run?.score ?? 0}), style: UiText.numbers(context, size: 16)),
+          if (game.boardCoins > 0) Text(i18n.t('win.reward', {'n': game.boardCoins}), style: UiText.numbers(context, size: 16, color: t.color('text.accent'))),
+        ],
+      ]),
+    );
+  }
+}
+
+/// The end of an endless run: the total, the boards cleared and how it
+/// compares with the record — then a new run or home.
+Future<void> showRunSummary(BuildContext context, RunSummary summary) {
+  final s = Services.of(context, listen: false);
+  final i18n = s.i18n;
+  final t = s.theme.tokens;
+  return showStoneDialog<void>(
+    context,
+    title: i18n.t('endless.runOver'),
+    dismissible: false,
+    builder: (dialogContext) => Column(mainAxisSize: MainAxisSize.min, children: [
+      Text(i18n.t('endless.runTotal', {'n': summary.score}), style: UiText.numbers(context, size: 26, color: t.color('text.accent'))),
+      const SizedBox(height: 4),
+      Text(i18n.t('endless.runSummary', {'n': summary.boards}), textAlign: TextAlign.center, style: UiText.style(context, size: 15)),
+      const SizedBox(height: 8),
+      if (summary.newRecord)
+        Text(i18n.t('endless.newBest'), style: UiText.style(context, size: 18, color: t.color('ui.success')))
+      else
+        Text(i18n.t('endless.best', {'n': s.player.endless.best}), style: UiText.numbers(context, size: 14)),
+      const SizedBox(height: 16),
+      StoneButton(label: i18n.t('endless.start'), primary: true, glyph: Glyph.restart, onTap: () {
+        Navigator.pop(dialogContext);
+        launchEndless(context, fresh: true, replace: true);
+      }),
+      const SizedBox(height: 10),
+      StoneButton(label: i18n.t('common.home'), glyph: Glyph.home, dense: true, onTap: () {
+        Navigator.pop(dialogContext);
+        openHome(context);
+      }),
+    ]),
+  );
+}
+
 Future<void> showLoseDialog(BuildContext context, GameController game) {
   final s = Services.of(context, listen: false);
   final i18n = s.i18n;
-  final challenge = game.mode == PuzzleMode.challenge;
+  final endless = game.mode == PuzzleMode.endless;
+
+  Future<void> endRun() async {
+    final summary = await game.finishRun();
+    if (context.mounted) await showRunSummary(context, summary);
+  }
   return showStoneDialog<void>(
     context,
     title: i18n.t('lose.title'),
@@ -246,8 +338,8 @@ Future<void> showLoseDialog(BuildContext context, GameController game) {
         return Column(mainAxisSize: MainAxisSize.min, children: [
           Text(i18n.t(game.engine.lossReason == LossReason.leftovers ? 'lose.leftovers' : 'lose.trayFull'),
               textAlign: TextAlign.center, style: UiText.style(context, size: 16)),
-          if (challenge) Text(i18n.t('challenge.runTotal', {'n': game.run?.score ?? 0}), style: UiText.numbers(context, size: 16)),
-          if (challenge) Text(i18n.t('challenge.best', {'n': s.player.bestScore}), style: UiText.numbers(context, size: 14)),
+          if (endless) Text(i18n.t('endless.runTotal', {'n': s.endless.run?.score ?? 0}), style: UiText.numbers(context, size: 16)),
+          if (endless) Text(i18n.t('endless.best', {'n': s.player.endless.best}), style: UiText.numbers(context, size: 14)),
           const SizedBox(height: 14),
           if (game.rescueChecking)
             Text(i18n.t('lose.checking'), style: UiText.style(context, size: 14, color: s.theme.tokens.color('text.muted')))
@@ -273,23 +365,27 @@ Future<void> showLoseDialog(BuildContext context, GameController game) {
           ] else
             Text(i18n.t('lose.noRescue'), textAlign: TextAlign.center, style: UiText.style(context, size: 14, color: s.theme.tokens.color('text.muted'))),
           const SizedBox(height: 12),
-          if (!challenge)
+          if (!endless)
             StoneButton(label: i18n.t('lose.retry'), glyph: Glyph.restart, onTap: () {
               Navigator.pop(context);
               game.abandon();
               Navigator.pushReplacement(context, portalRoute(gameScreenFor(game.puzzle)));
             }),
-          if (challenge)
+          if (endless)
             StoneButton(label: i18n.t('lose.endRun'), glyph: Glyph.close, onTap: () {
               Navigator.pop(context);
-              game.abandon();
-              openHome(context);
+              endRun();
             }),
           const SizedBox(height: 8),
-          StoneButton(label: i18n.t('common.home'), glyph: Glyph.home, dense: true, onTap: () {
+          StoneButton(label: i18n.t('common.home'), glyph: Glyph.home, dense: true, onTap: () async {
             Navigator.pop(context);
-            if (!challenge) game.abandon();
-            openHome(context);
+            // Leaving a lost endless board ends the run and records it.
+            if (endless) {
+              await game.finishRun();
+            } else {
+              game.abandon();
+            }
+            if (context.mounted) openHome(context);
           }),
         ]);
       },

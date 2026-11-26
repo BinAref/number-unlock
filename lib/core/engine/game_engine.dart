@@ -41,6 +41,10 @@ class BoosterUsage {
 
   int get hints => adHints + coinHints;
 
+  /// Every help taken on this board: each hint, the sixth slot and a swap
+  /// count one apiece (the star rule of the fixed levels).
+  int get helps => hints + (extraSlot ? 1 : 0) + (swapUsed ? 1 : 0);
+
   BoosterUsage copy() =>
       BoosterUsage(extraSlot: extraSlot, swapUsed: swapUsed, adHints: adHints, coinHints: coinHints);
 

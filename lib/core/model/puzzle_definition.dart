@@ -3,8 +3,11 @@ import '../util/json_read.dart';
 import 'puzzle_layout.dart';
 
 enum PuzzleMode {
+  /// Fixed levels: the same puzzle for everyone, rated with stars.
   levels,
-  challenge;
+
+  /// Endless runs: random boards, cumulative points, until a loss.
+  endless;
 
   /// Key used by rule availability (`modes` in `rules.json`).
   String get key => name;
@@ -18,7 +21,7 @@ class PuzzleDefinition {
     required this.layout,
     required this.rulesetVersion,
     this.levelNumber,
-    this.challengeTier,
+    this.boardNumber,
     this.seed,
     this.profile,
     this.solution,
@@ -48,7 +51,7 @@ class PuzzleDefinition {
       ),
       rulesetVersion: readInt(json['rules'], 1),
       levelNumber: readIntOrNull(json['level']),
-      challengeTier: readIntOrNull(json['tier']),
+      boardNumber: readIntOrNull(json['board']),
       seed: readIntOrNull(json['seed']),
       profile: difficulty == null ? null : DifficultyProfile.fromJson(readMap(difficulty)),
       solution: solution == null ? null : readIntList(solution),
@@ -60,7 +63,9 @@ class PuzzleDefinition {
   final PuzzleLayout layout;
   final int rulesetVersion;
   final int? levelNumber;
-  final int? challengeTier;
+
+  /// The board's place in its endless run (1 = first).
+  final int? boardNumber;
   final int? seed;
   final DifficultyProfile? profile;
 
@@ -71,7 +76,7 @@ class PuzzleDefinition {
         'id': id,
         'mode': mode.name,
         if (levelNumber != null) 'level': levelNumber,
-        if (challengeTier != null) 'tier': challengeTier,
+        if (boardNumber != null) 'board': boardNumber,
         if (seed != null) 'seed': seed,
         'rows': layout.rows,
         'cols': layout.cols,

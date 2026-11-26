@@ -108,7 +108,6 @@ class _TopArch extends StatelessWidget {
               listenable: s.player,
               builder: (context, _) {
                 final p = s.player;
-                final lvl = p.level;
                 return Row(children: [
                   Pressable(onTap: () => showProfile(context), child: _Portrait(emblem: kEmblems[p.profile.avatar % kEmblems.length], stage: p.progress.highestUnlocked)),
                   const SizedBox(width: 10),
@@ -121,9 +120,9 @@ class _TopArch extends StatelessWidget {
                         const SizedBox(width: 10),
                         GlyphIcon(Glyph.trophy, size: 16, color: t.color('gold.light')),
                         const SizedBox(width: 4),
-                        Text('${p.bestScore}', style: UiText.numbers(context, size: 13)),
+                        Text('${p.endless.best}', style: UiText.numbers(context, size: 13)),
                         const SizedBox(width: 8),
-                        Expanded(child: _ProgressGroove(value: lvl.progress)),
+                        Expanded(child: _ProgressGroove(value: p.progress.mastery)),
                       ]),
                     ]),
                   ),
@@ -266,7 +265,7 @@ class _Terrace extends StatelessWidget {
         Positioned(
           left: (w - item) / 2,
           top: 0,
-          child: object(Loop(period: const Duration(seconds: 4), builder: (context, ph) => CustomPaint(painter: CrystalPainter(t, ph))), i18n.t('home.challenge'), () => openChallenge(context), scale: 0.9),
+          child: object(Loop(period: const Duration(seconds: 4), builder: (context, ph) => CustomPaint(painter: CrystalPainter(t, ph))), i18n.t('home.endless'), () => openEndless(context), scale: 0.9),
         ),
         Positioned(
           left: (w - item * 1.5) / 2,

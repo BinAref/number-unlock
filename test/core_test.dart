@@ -3,10 +3,8 @@ import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
 import 'package:unlock_numbers/core/boosters/booster_system.dart';
-import 'package:unlock_numbers/core/challenge/challenge_system.dart';
 import 'package:unlock_numbers/core/economy/wallet.dart';
 import 'package:unlock_numbers/core/engine/game_engine.dart';
-import 'package:unlock_numbers/core/generator/difficulty_curve.dart';
 import 'package:unlock_numbers/core/hint/hint_system.dart';
 import 'package:unlock_numbers/core/jobs/compute_job.dart';
 import 'package:unlock_numbers/core/model/puzzle_definition.dart';
@@ -219,26 +217,6 @@ void main() {
       expect(w.credit(10, opId: 'buy:1'), isTrue);
       expect(w.credit(10, opId: 'buy:1'), isFalse);
       expect(w.coins, 11);
-    });
-  });
-
-  group('challenge', () {
-    final director = ChallengeDirector(
-      curve: DifficultyCurve.fromJson(jsonDecode(File('assets/config/challenge_curve.json').readAsStringSync()) as Map<String, Object?>, bandsKey: 'tiers'),
-      rules: book.current,
-    );
-
-    test('a seed always forges the same verified puzzle; new seeds differ', () {
-      final a = runToCompletion(director.jobFor(1, 1234), slice: 4)!;
-      final b = runToCompletion(director.jobFor(1, 1234), slice: 4)!;
-      final c = runToCompletion(director.jobFor(1, 98765), slice: 4)!;
-      expect(a.layout, b.layout);
-      expect(a.layout == c.layout, isFalse);
-      final g = GameEngine(puzzle: director.toPuzzle(a, tier: 1, seed: 1234), rules: director.engineFor(1));
-      for (final cell in a.solution) {
-        g.extract(cell);
-      }
-      expect(g.status, GameStatus.won);
     });
   });
 }

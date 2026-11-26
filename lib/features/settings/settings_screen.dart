@@ -75,8 +75,8 @@ class SettingsScreen extends StatelessWidget {
     final i18n = s.i18n;
     final p = s.player;
     final t = s.theme.tokens;
-    Widget stat(Glyph g, String key, int value) => Padding(
-          padding: const EdgeInsets.symmetric(vertical: 4),
+    Widget stat(Glyph g, String key, Object value) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 3),
           child: Row(children: [
             GlyphIcon(g, size: 18, color: t.color('gold.light')),
             const SizedBox(width: 10),
@@ -84,13 +84,29 @@ class SettingsScreen extends StatelessWidget {
             Text('$value', style: UiText.numbers(context, size: 16, color: t.color('text.accent'))),
           ]),
         );
+    // Two separate systems, shown apart: level stars never mix with endless points.
+    Widget section(String key) => Padding(
+          padding: const EdgeInsets.only(top: 6, bottom: 2),
+          child: Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: Text(i18n.t(key), style: UiText.style(context, size: 13, color: t.color('text.muted'))),
+          ),
+        );
     showStoneDialog<void>(context, title: p.profile.name ?? i18n.t('profile.defaultName'), builder: (context) => Column(mainAxisSize: MainAxisSize.min, children: [
-          stat(Glyph.lock, 'profile.stage', p.progress.highestUnlocked),
+          section('profile.levels'),
+          stat(Glyph.check, 'profile.completed', p.progress.completedCount),
           stat(Glyph.sparkle, 'profile.stars', p.progress.totalStars),
+          stat(Glyph.trophy, 'profile.threeStars', p.progress.threeStarCount),
+          stat(Glyph.hint, 'profile.mastery', '${(p.progress.mastery * 100).round()}%'),
+          stat(Glyph.lock, 'profile.stage', p.progress.highestUnlocked),
+          const SizedBox(height: 8),
+          section('profile.endless'),
+          stat(Glyph.trophy, 'profile.best', p.endless.best),
+          stat(Glyph.sparkle, 'profile.last', p.endless.last),
+          stat(Glyph.check, 'profile.mostBoards', p.endless.bestBoards),
+          stat(Glyph.restart, 'profile.runs', p.endless.runs),
+          const SizedBox(height: 8),
           stat(Glyph.plus, 'profile.coins', p.coins),
-          stat(Glyph.trophy, 'profile.best', p.bestScore),
-          stat(Glyph.hint, 'profile.bestTier', p.bestTier),
-          stat(Glyph.check, 'profile.solved', p.challengesSolved),
           const SizedBox(height: 14),
           StoneButton(label: i18n.t('profile.edit'), glyph: Glyph.user, onTap: () {
             Navigator.pop(context);

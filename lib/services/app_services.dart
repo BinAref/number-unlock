@@ -4,8 +4,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter/widgets.dart';
 
 import '../core/boosters/booster_system.dart';
-import '../core/challenge/challenge_system.dart';
 import '../core/economy/economy_rules.dart';
+import '../core/endless/endless_director.dart';
 import '../core/generator/difficulty_curve.dart';
 import '../core/generator/level_forge.dart';
 import '../core/levels/level_catalog.dart';
@@ -13,6 +13,7 @@ import '../core/rules/rule_book.dart';
 import '../core/util/json_read.dart';
 import 'audio_service.dart';
 import 'compute_scheduler.dart';
+import 'endless_service.dart';
 import 'localization_service.dart';
 import 'monetization.dart';
 import 'level_service.dart';
@@ -57,7 +58,7 @@ class AppServices {
     required this.ads,
     required this.purchases,
     required this.levels,
-    required this.challenges,
+    required this.endless,
     required this.compute,
   });
 
@@ -76,7 +77,12 @@ class AppServices {
     final economy = EconomyRules.fromJson(economyJson);
     final solver = readMap(economyJson['solver']);
     final rules = RuleBook.fromJson(await json('assets/config/rules.json'));
+    final rulesRaw = await b.loadString('assets/config/rules.json');
+    final curveRaw = await b.loadString('assets/config/level_curve.json');
+    final curveMap = readMap(jsonDecode(curveRaw));
+    final levelCacheVersion = readInt(curveMap['generator'], 3);
     final save = SaveSystem(store ?? await PrefsStore.open());
+    await save.migrate(levelCacheVersion: levelCacheVersion);
     final player = await PlayerService.load(save, economy);
     final settings = player.settings;
     final i18n = await LocalizationService.load(bundle: b, preferred: settings.language, device: deviceLocale);
@@ -85,10 +91,7 @@ class AppServices {
     final audioService = AudioService(music: settings.music, sfx: settings.sfx, enabled: audio);
     await audioService.init();
     final levelIndex = LevelIndex.fromJson(await json('assets/levels/index.json'));
-    final challengeCurve = DifficultyCurve.fromJson(await json('assets/config/challenge_curve.json'), bandsKey: 'tiers');
-    final rulesRaw = await b.loadString('assets/config/rules.json');
-    final curveRaw = await b.loadString('assets/config/level_curve.json');
-    final curveMap = readMap(jsonDecode(curveRaw));
+    final endlessCurve = DifficultyCurve.fromJson(await json('assets/config/endless_curve.json'), bandsKey: 'boards');
     final scheduler = ComputeScheduler(slice: Duration(milliseconds: readInt(solver['sliceMs'], 7)));
     return AppServices._(
       config: config,
@@ -112,12 +115,16 @@ class AppServices {
         forge: LevelForge(curve: DifficultyCurve.fromJson(curveMap), book: rules),
         store: save.store,
         scheduler: scheduler,
-        version: readInt(curveMap['generator'], 2),
+        version: levelCacheVersion,
         lookahead: readInt(curveMap['lookahead'], 10),
         rulesJson: rulesRaw,
         curveJson: curveRaw,
       ),
-      challenges: ChallengeDirector(curve: challengeCurve, rules: rules.current),
+      endless: EndlessService(
+        director: EndlessDirector(curve: endlessCurve, rules: rules.current),
+        compute: scheduler,
+        save: save,
+      ),
       compute: scheduler,
     );
   }
@@ -139,7 +146,9 @@ class AppServices {
   final RewardedAdsService ads;
   final PurchaseService purchases;
   final LevelService levels;
-  final ChallengeDirector challenges;
+
+  /// Endless runs and their boards (independent of the fixed levels).
+  final EndlessService endless;
   final ComputeScheduler compute;
 
   bool get reducedEffects => player.settings.reducedEffects;
