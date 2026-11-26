@@ -70,9 +70,20 @@ class GameController extends ChangeNotifier {
   int _tick = 0;
   int? hintCell;
   bool swapMode = false;
-  int? swapFirst;
   bool thinking = false;
-  bool _busy = false;
+
+  /// A booster at work (an ad, a hint being worked out): other boosters
+  /// wait for it; taps on the board never do.
+  bool _boosterBusy = false;
+
+  /// Visual sequences still playing. Taps never wait for them: the game
+  /// logic moves at once and each move's animation runs alongside the rest.
+  int _visuals = 0;
+
+  /// Bumps with every move, so a result computed for an older position (a
+  /// hint) is never shown on a newer one.
+  int _version = 0;
+  int? _swapFirstCell;
 
   /// Set once the animations of a winning or losing move are over.
   GameStatus? ended;
@@ -101,7 +112,14 @@ class GameController extends ChangeNotifier {
   PuzzleDefinition get puzzle => engine.puzzle;
   PuzzleMode get mode => puzzle.mode;
   BoosterRules get boosterRules => services.boosters;
-  bool get busy => _busy;
+  bool get busy => _boosterBusy;
+
+  /// Whether any move's animation is still playing.
+  bool get animating => _visuals > 0;
+
+  /// The tray slot chosen first for a swap (it follows its tile while the
+  /// tray closes ranks).
+  int? get swapFirst => _swapFirstCell == null ? null : slotOf(_swapFirstCell!);
   int get capacity => engine.capacity;
   BoosterPolicy get policy => BoosterPolicy(boosterRules);
 
@@ -140,7 +158,31 @@ class GameController extends ChangeNotifier {
     if (!_disposed) notifyListeners();
   }
 
-  Future<void> _wait(String motion) => Future<void>.delayed(services.motion(motion));
+  Future<void> _wait(String motion) {
+    final d = services.motion(motion);
+    // Several moves in flight: the older animations hurry to keep up.
+    return Future<void>.delayed(_visuals > 1 ? d * 0.35 : d);
+  }
+
+  /// Runs one move's animation alongside any others. When the last one
+  /// ends, a finished game is announced (so the end screen never cuts an
+  /// animation short, and never waits on a fixed delay).
+  void _play(Future<void> Function() sequence) {
+    _visuals++;
+    sequence().whenComplete(() {
+      _visuals--;
+      if (_visuals == 0) _settle();
+    });
+  }
+
+  void _settle() {
+    if (_disposed || ended != null) return;
+    final status = engine.status;
+    if (status == GameStatus.won || status == GameStatus.lost) {
+      _end(status);
+      _notify();
+    }
+  }
 
   void _persist() {
     final key = mode.key;
@@ -151,8 +193,11 @@ class GameController extends ChangeNotifier {
     }
   }
 
-  Future<void> tapTile(int cell) async {
-    if (_busy || ended != null || swapMode) return;
+  /// Takes a tile — at once, whatever is still animating. The logic commits
+  /// first (and is saved); the flight, the landing and any matches then
+  /// play alongside earlier moves.
+  void tapTile(int cell) {
+    if (ended != null || swapMode) return;
     if (!engine.isOpen(cell)) {
       if (engine.board.hasTile(cell)) {
         onMessage?.call('game.lockedTile');
@@ -165,8 +210,8 @@ class GameController extends ChangeNotifier {
     final before = (engine.board.removedCells, engine.trayItems, engine.capacity, hintCell == cell);
     final result = engine.extract(cell);
     if (!result.accepted) return;
+    _version++;
     _grade(before.$1, before.$2, before.$3, cell, hinted: before.$4);
-    _busy = true;
     hintCell = null;
     services.audio.pick(value);
     services.haptics.light();
@@ -175,17 +220,16 @@ class GameController extends ChangeNotifier {
     }
     tray.add(TrayEntry(cell));
     _persist();
-    _notify();
-    await _wait('tileFly');
-    services.audio.play(Sfx.land, volume: 0.45);
-    if (result.unlocked.isNotEmpty) services.audio.play(Sfx.unlock, volume: 0.4);
-    await _playMatches(result.matches);
-    _busy = false;
     if (result.status == GameStatus.playing && engine.tray.length == engine.capacity - 1 && engine.capacity > 2) {
       onMessage?.call('game.lastSlot');
     }
-    _end(result.status);
     _notify();
+    _play(() async {
+      await _wait('tileFly');
+      services.audio.play(Sfx.land, volume: 0.45);
+      if (result.unlocked.isNotEmpty) services.audio.play(Sfx.unlock, volume: 0.4);
+      await _playMatches(result.matches);
+    });
   }
 
   void _grade(List<int> removed, List<int> tray, int capacity, int cell, {required bool hinted}) {
@@ -295,8 +339,8 @@ class GameController extends ChangeNotifier {
 
   /// The sixth slot (coins or an ad; never charged when already open).
   Future<BoosterResult> addSlot(Payment pay) async {
-    if (_busy || !engine.canAddSlot || pay == Payment.free) return BoosterResult.unavailable;
-    _busy = true;
+    if (_boosterBusy || !engine.canAddSlot || pay == Payment.free) return BoosterResult.unavailable;
+    _boosterBusy = true;
     try {
       if (pay == Payment.coins) {
         final r = services.player.spend(boosterRules.extraSlotCoins, 'slot:$_attempt');
@@ -317,30 +361,38 @@ class GameController extends ChangeNotifier {
       }
       return BoosterResult.done;
     } finally {
-      _busy = false;
+      _boosterBusy = false;
       _notify();
     }
   }
 
-  /// The smart hint: computed first, paid only when a real hint exists.
+  /// The smart hint: computed first (in the background — the board stays
+  /// playable), paid only when a real hint exists. A hint worked out for a
+  /// position the player has since changed is dropped and worked out again.
   Future<BoosterResult> useHint(Payment pay) async {
-    if (_busy || ended != null) return BoosterResult.unavailable;
+    if (_boosterBusy || ended != null) return BoosterResult.unavailable;
     if (pay == Payment.free && freeHintsLeft <= 0) return BoosterResult.unavailable;
     if (pay == Payment.ad && !boosterRules.hintByAd) return BoosterResult.unavailable;
     if (pay == Payment.ad && !services.adGate.ready) return BoosterResult.adWait;
     if (pay == Payment.coins && !services.player.canAfford(boosterRules.hintCoins)) return BoosterResult.insufficient;
-    _busy = true;
+    _boosterBusy = true;
     thinking = true;
     _notify();
     try {
-      final result = await services.compute.run(
-        HintSearch(_ctx, removed: engine.board.removedCells, tray: engine.trayItems, capacity: engine.capacity, budget: services.hintBudget),
-        units: 400,
-      );
+      HintResult? result;
+      for (var tries = 0; tries < 2 && result == null; tries++) {
+        final at = _version;
+        final r = await services.compute.run(
+          HintSearch(_ctx, removed: engine.board.removedCells, tray: engine.trayItems, capacity: engine.capacity, budget: services.hintBudget),
+          units: 400,
+        );
+        if (at == _version) result = r;
+      }
       thinking = false;
       _notify();
+      if (result == null || ended != null) return BoosterResult.unsure;
       if (result.status == HintStatus.noPath) {
-        _busy = false;
+        _boosterBusy = false;
         await _analyseRescue();
         return BoosterResult.noHint;
       }
@@ -369,7 +421,7 @@ class GameController extends ChangeNotifier {
       return BoosterResult.done;
     } finally {
       thinking = false;
-      _busy = false;
+      _boosterBusy = false;
       _notify();
     }
   }
@@ -378,19 +430,19 @@ class GameController extends ChangeNotifier {
   /// can be made — or cancelled and made later on the same board — without
   /// paying again.
   Future<BoosterResult> unlockSwap(Payment pay) async {
-    if (_busy || !policy.swapLeft(engine.boosters)) return BoosterResult.unavailable;
+    if (_boosterBusy || !policy.swapLeft(engine.boosters)) return BoosterResult.unavailable;
     if (swapReady) return BoosterResult.done;
     if (pay == Payment.coins) {
       final r = services.player.spend(boosterRules.swapCoins, 'swap:$_attempt');
       if (r != SpendResult.spent) return r == SpendResult.insufficient ? BoosterResult.insufficient : BoosterResult.unavailable;
     } else if (pay == Payment.ad && boosterRules.swapByAd) {
-      _busy = true;
+      _boosterBusy = true;
       try {
         final o = await services.adGate.show('swap');
         if (o == null) return BoosterResult.adWait;
         if (o != AdOutcome.rewarded) return _mapAd(o);
       } finally {
-        _busy = false;
+        _boosterBusy = false;
       }
     } else {
       return BoosterResult.unavailable;
@@ -403,39 +455,46 @@ class GameController extends ChangeNotifier {
 
   /// Enters swap mode once the swap is free or paid for (one per board).
   BoosterResult startSwap() {
-    if (_busy || !policy.swapLeft(engine.boosters)) return BoosterResult.unavailable;
+    if (_boosterBusy || !policy.swapLeft(engine.boosters)) return BoosterResult.unavailable;
     if (engine.tray.length < 2) return BoosterResult.unavailable;
     if (!swapReady) return BoosterResult.insufficient;
     swapMode = true;
-    swapFirst = null;
+    _swapFirstCell = null;
     _notify();
     return BoosterResult.done;
   }
 
   void cancelSwap() {
     swapMode = false;
-    swapFirst = null;
+    _swapFirstCell = null;
     _notify();
   }
 
-  Future<void> tapSlot(int slot) async {
-    if (!swapMode || _busy || slot >= tray.length) return;
+  /// Chooses the tiles of a swap. Choices follow tiles, not positions: the
+  /// tray may still be closing ranks from an earlier match while the player
+  /// picks, and a tile already vanishing cannot be chosen.
+  void tapSlot(int slot) {
+    if (!swapMode || slot >= tray.length) return;
+    final entry = tray[slot];
+    if (entry.matching || entry.vanishing) return;
     services.haptics.selection();
-    final first = swapFirst;
-    if (first == null || first == slot) {
-      swapFirst = first == slot ? null : slot;
+    final firstCell = _swapFirstCell;
+    if (firstCell == null || firstCell == entry.cell) {
+      _swapFirstCell = firstCell == entry.cell ? null : entry.cell;
       _notify();
       return;
     }
-    if (!swapReady) {
+    final a = engine.trayItems.indexOf(firstCell);
+    final b = engine.trayItems.indexOf(entry.cell);
+    if (!swapReady || a < 0 || b < 0) {
       cancelSwap();
       return;
     }
     final freeSwap = !engine.boosters.swapUnlocked;
-    _busy = true;
     swapMode = false;
-    swapFirst = null;
-    final result = engine.swap(first, slot);
+    _swapFirstCell = null;
+    final result = engine.swap(a, b);
+    _version++;
     final run = _run;
     if (freeSwap && run != null) {
       // The run's one free swap is spent.
@@ -443,20 +502,21 @@ class GameController extends ChangeNotifier {
       services.endless.saveRun();
     }
     sheet?.usedSwap = true;
-    final a = tray[first];
-    tray[first] = tray[slot];
-    tray[slot] = a;
+    final va = slotOf(firstCell)!;
+    final vb = slotOf(entry.cell)!;
+    final moved = tray[va];
+    tray[va] = tray[vb];
+    tray[vb] = moved;
     services.audio.play(Sfx.swap);
-    _notify();
-    await _wait('swap');
-    await _playMatches(result.matches);
     _persist();
-    _busy = false;
-    if (ended == GameStatus.lost) {
+    if (ended == GameStatus.lost && engine.status == GameStatus.playing) {
       ended = null;
       rescues = null;
     }
-    _end(result.status);
     _notify();
+    _play(() async {
+      await _wait('swap');
+      await _playMatches(result.matches);
+    });
   }
 }

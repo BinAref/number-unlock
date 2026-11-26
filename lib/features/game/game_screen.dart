@@ -105,7 +105,9 @@ class _GameScreenState extends State<GameScreen> {
     if (ended == null) return;
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       if (!mounted) return;
-      await Future<void>.delayed(const Duration(milliseconds: 350));
+      // The controller announces the end only once every animation has
+      // settled, so a breath for the last frame is all that is needed.
+      await Future<void>.delayed(const Duration(milliseconds: 120));
       if (!mounted || game.ended != ended) return;
       if (ended == GameStatus.won) {
         await showWinDialog(context, game);
