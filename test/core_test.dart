@@ -19,48 +19,85 @@ import 'package:unlock_numbers/core/solver/solver_context.dart';
 final RuleBook book = RuleBook.fromJson(jsonDecode(File('assets/config/rules.json').readAsStringSync()) as Map<String, Object?>);
 RuleEngine rules() => RuleEngine.forPuzzle(book.current, mode: 'levels');
 
-PuzzleDefinition puzzle(int rows, int cols, String cells) =>
-    PuzzleDefinition(id: 't', mode: PuzzleMode.levels, layout: PuzzleLayout.decode(rows, cols, cells), rulesetVersion: 1);
+/// Without [dirs] and [open] the board has no arrows: every tile is open.
+PuzzleDefinition puzzle(int rows, int cols, String cells, {String? dirs, String? open}) => PuzzleDefinition(
+      id: 't',
+      mode: PuzzleMode.levels,
+      layout: PuzzleLayout.decode(rows, cols, cells, dirs: dirs, open: open),
+      rulesetVersion: 1,
+    );
 
 GameEngine game(int rows, int cols, String cells, {int capacity = 5}) => GameEngine(puzzle: puzzle(rows, cols, cells), rules: rules(), baseCapacity: capacity);
 
 void main() {
-  group('board and unlocking', () {
+  group('board and the arrow rule', () {
     // Rows: top 1 2 3 / middle 4 5 6 / bottom 7 8 9 (cells 0..8).
+    // Arrows: 0 ★ · 1 ← · 2 ↑ / 3 → · 4 ↑→ · 5 ↑ / 6 ↑ · 7 ↑ · 8 ←.
+    // Open from the start: the two bottom corners (6 and 8).
     const grid = '1a2a3a4a5a6a7a8a9a';
+    const dirs = '081231118';
+    const open = '000000101';
+    GameEngine arrows() => GameEngine(puzzle: puzzle(3, 3, grid, dirs: dirs, open: open), rules: rules(), baseCapacity: 9);
 
-    test('the bottom row starts open, everything else locked', () {
-      final g = game(3, 3, grid);
-      expect(g.openTiles(), [6, 7, 8]);
+    test('only the marked tiles start open', () {
+      expect(arrows().openTiles(), [6, 8]);
     });
 
     test('locked tiles cannot be picked', () {
-      final g = game(3, 3, grid);
-      expect(g.extract(4).rejection, MoveRejection.locked);
+      final g = arrows();
+      expect(g.extract(7).rejection, MoveRejection.locked);
       expect(g.trayItems, isEmpty);
     });
 
-    test('extracting opens the four direct neighbours only, never diagonals', () {
-      final g = game(3, 3, grid);
+    test('a tile opens only what its arrows point at — never all its neighbours', () {
+      final g = arrows();
+      expect(g.extract(6).unlocked, [3]);
+      expect(g.isOpen(7), isFalse);
+      expect(g.extract(8).unlocked, [7]);
       expect(g.extract(7).unlocked, [4]);
-      expect(g.isOpen(3), isFalse);
-      expect(g.isOpen(5), isFalse);
-      expect(g.extract(4).unlocked..sort(), [1, 3, 5]);
-      expect(g.isOpen(0), isFalse);
+      expect(g.extract(4).unlocked..sort(), [1, 5]);
     });
 
-    test('an open tile does not open its neighbours until extracted', () {
-      final g = game(3, 3, grid);
-      expect(g.isOpen(3), isFalse);
+    test('opening never chains: a tile that opened opens nothing until extracted', () {
+      final g = arrows();
+      g.extract(6);
+      expect(g.isOpen(3), isTrue);
       expect(g.isOpen(4), isFalse);
     });
 
+    test('arrows at a taken tile or off the board open nothing in their place', () {
+      final g = arrows();
+      for (final c in [6, 8, 7, 4]) {
+        g.extract(c);
+      }
+      expect(g.extract(3).unlocked, isEmpty, reason: 'its arrow points at 4, already taken');
+      expect(g.isOpen(0), isFalse);
+      expect(g.extract(5).unlocked, [2]);
+      expect(g.extract(2).unlocked, isEmpty, reason: 'its arrow points off the board');
+    });
+
+    test('a star opens nothing', () {
+      final g = arrows();
+      expect(g.puzzle.layout.isStar(0), isTrue);
+      for (final c in [6, 8, 7, 4, 1]) {
+        g.extract(c);
+      }
+      expect(g.isOpen(0), isTrue);
+      expect(g.extract(0).unlocked, isEmpty);
+    });
+
     test('taken cells stay empty and nothing moves', () {
-      final g = game(3, 3, grid);
-      g.extract(7);
-      expect(g.board.hasTile(7), isFalse);
-      expect([for (final c in [0, 1, 2, 3, 4, 5, 6, 8]) g.board.hasTile(c)], everyElement(isTrue));
+      final g = arrows();
+      g.extract(6);
+      expect(g.board.hasTile(6), isFalse);
+      expect([for (final c in [0, 1, 2, 3, 4, 5, 7, 8]) g.board.hasTile(c)], everyElement(isTrue));
       expect(g.puzzle.layout.specOf(4).value, 5);
+    });
+
+    test('boards without arrows start fully open', () {
+      final g = game(3, 3, grid);
+      expect(g.openTiles().length, 9);
+      expect(g.puzzle.layout.hasArrows, isFalse);
     });
   });
 

@@ -4,6 +4,7 @@ import '../difficulty/difficulty_analyzer.dart';
 import '../difficulty/difficulty_profile.dart';
 import '../engine/game_engine.dart';
 import '../jobs/compute_job.dart';
+import '../model/arrows.dart';
 import '../model/puzzle_definition.dart';
 import '../model/puzzle_layout.dart';
 import '../model/tile_spec.dart';
@@ -14,6 +15,7 @@ import '../solver/path_counter.dart';
 import '../solver/puzzle_solver.dart';
 import '../solver/solver_context.dart';
 import 'generation_params.dart';
+import 'unlock_structure.dart';
 
 /// Resumable hardening (one mutation per [step]); see [LevelGenerator.harden].
 ///
@@ -46,6 +48,11 @@ class Hardener {
   late List<int> _bestWitness;
   double _bestCount = 0;
   int _steps = 0;
+
+  /// Counts that ran past their budget in a row: a board too wide to count
+  /// is not hardened further (keeps forging time bounded on every device).
+  int _overflows = 0;
+  static const int _maxOverflows = 3;
   bool _done = false;
   Candidate? _result;
 
@@ -82,9 +89,18 @@ class Hardener {
     if (!_gen.rules.usesColor) {
       final cells = List<TileSpec?>.of(layout.cells);
       _gen._recolor(cells, layout.rows, layout.cols, _p.colorCount, _rng);
-      layout = PuzzleLayout(rows: layout.rows, cols: layout.cols, cells: cells);
+      layout = layout.withCells(cells);
     }
     _result = Candidate(layout, List<int>.unmodifiable(_witness), _floor);
+  }
+
+  /// Gives up after a few counts in a row overflow, keeping the best layout.
+  bool _overflowed() {
+    if (++_overflows < _maxOverflows) return false;
+    _layout = _best;
+    _witness = _bestWitness;
+    _finish();
+    return true;
   }
 
   /// One mutation attempt; returns true when hardening is over.
@@ -109,9 +125,15 @@ class Hardener {
     next ??= _gen._swapRandom(_layout, _rng);
     if (next == null) return false;
     final guard = _uniqueStage ? _target - 1 : k - 1;
-    if (guard >= 2 && _gen._countPaths(next, guard) != 0) return false;
+    if (guard >= 2) {
+      final g = _gen._countPaths(next, guard);
+      if (g == null) return _overflowed();
+      if (g != 0) return false;
+    }
     final c = _gen._countPaths(next, k);
-    if (c == null || c < _goal) return false;
+    if (c == null) return _overflowed();
+    _overflows = 0;
+    if (c < _goal) return false;
     final count = _count!;
     final accept = c < count || (c == count && _rng.chance(0.35)) || _rng.chance(0.02);
     if (!accept) return false;
@@ -207,7 +229,7 @@ class GenerationJob implements ComputeJob<GeneratedPuzzle?> {
         meetsTarget: penalty == 0,
       );
     }
-    if (penalty == 0) _done = true;
+    if (penalty <= LevelGenerator.closeEnough) _done = true;
   }
 }
 
@@ -244,7 +266,8 @@ class GeneratedPuzzle {
 ///
 /// 1. Shape: the grid, plus an empty cell when needed so the tile count is
 ///    even (every match removes two tiles).
-/// 2. A hidden winning order of picks that respects unlocking.
+/// 2. The arrows ([UnlockStructureBuilder]), then a hidden winning order of
+///    picks that respects them.
 /// 3. A tray "height walk" for that order: when a pick must wait and when it
 ///    must match the tile before it, never exceeding the target depth.
 /// 4. Values (and colours) chosen through the rule engine to honour the walk.
@@ -275,6 +298,10 @@ class LevelGenerator {
   GeneratedPuzzle? generate(GenerationParams params, {required int seed, int maxAttempts = 30}) =>
       runToCompletion(GenerationJob(this, params, seed: seed, maxAttempts: maxAttempts), slice: 64);
 
+  /// A candidate this close to its band is kept: hunting for the exact band
+  /// on boards that naturally land a point or two outside it only burns time.
+  static const double closeEnough = 3;
+
   /// 0 when [profile] satisfies [params]; grows with the distance otherwise.
   static double penaltyFor(DifficultyProfile profile, GenerationParams params) {
     var penalty = 0.0;
@@ -292,7 +319,7 @@ class LevelGenerator {
     final cols = p.cols;
     final n = rows * cols;
     final gaps = math.max(0, math.min(p.bottomGaps, cols - 2));
-    var voids = p.voids >= 0 ? p.voids : ((n - gaps).isOdd ? 1 : 0);
+    var voids = p.voids >= 0 ? p.voids : (p.holes > 0 ? ((n - gaps) * p.holes).round() : ((n - gaps).isOdd ? 1 : 0));
     if ((n - gaps - voids).isOdd) voids += 1;
     if (n - gaps - voids < 2) return null;
 
@@ -301,10 +328,13 @@ class LevelGenerator {
       if (!_carve(isTile, rows, cols, p, rng)) return null;
     } else {
       if (!_placeBottomGaps(isTile, rows, cols, gaps, rng)) return null;
-      if (!_placeVoids(isTile, rows, cols, voids, rng)) return null;
+      if (!_placeVoids(isTile, rows, cols, voids, rng, scatter: p.holes > 0)) return null;
     }
-    if (p.spread) return _buildSpread(p, rng, isTile, rows, cols);
-    final order = _peel(rows, cols, isTile, p.peel, rng);
+    final structure = const UnlockStructureBuilder().build(isTile, rows, cols, p.arrows, p.entrances, rng);
+    if (structure == null) return null;
+    if (p.spread) return _buildSpread(p, rng, isTile, rows, cols, structure);
+    final order = _peel(rows, cols, isTile, structure, p.peel, rng);
+    if (order.length != isTile.where((t) => t).length) return null;
     final depth = math.max(1, math.min(p.targetDepth, order.length ~/ 2));
     final walk = _walk(order.length, depth, p.minPeakVisits, p.climb, rng, floor: math.min(p.floorDepth, depth - 1));
     if (walk == null) return null;
@@ -316,7 +346,7 @@ class LevelGenerator {
       cells[order[i]] = specs[i];
     }
     if (!rules.usesColor) _recolor(cells, rows, cols, p.colorCount, rng);
-    final layout = PuzzleLayout(rows: rows, cols: cols, cells: cells);
+    final layout = PuzzleLayout(rows: rows, cols: cols, cells: cells, dirs: structure.dirs, open: structure.open, hasArrows: structure.hasArrows);
 
     final engine = GameEngine(
       puzzle: PuzzleDefinition(id: 'candidate', mode: PuzzleMode.levels, layout: layout, rulesetVersion: rulesetVersion),
@@ -363,7 +393,7 @@ class LevelGenerator {
     return out;
   }
 
-  Candidate? _buildSpread(GenerationParams p, SeededRandom rng, List<bool> isTile, int rows, int cols) {
+  Candidate? _buildSpread(GenerationParams p, SeededRandom rng, List<bool> isTile, int rows, int cols, UnlockStructure structure) {
     final n = rows * cols;
     final cells = [
       for (var i = 0; i < n; i++)
@@ -395,7 +425,7 @@ class LevelGenerator {
       specs[c] = TileSpec(v, 0);
     }
     if (!rules.usesColor) _recolor(specs, rows, cols, p.colorCount, rng);
-    final layout = PuzzleLayout(rows: rows, cols: cols, cells: specs);
+    final layout = PuzzleLayout(rows: rows, cols: cols, cells: specs, dirs: structure.dirs, open: structure.open, hasArrows: structure.hasArrows);
     final solved = PuzzleSolver(SolverContext(layout, rules)).solve(capacity: baseCapacity, nodeBudget: 150000);
     if (!solved.solved) return null;
     return Candidate(layout, List<int>.unmodifiable(solved.path!));
@@ -459,7 +489,7 @@ class LevelGenerator {
       final cells = List<TileSpec?>.of(layout.cells);
       cells[a] = sb;
       cells[b] = sa;
-      return PuzzleLayout(rows: layout.rows, cols: layout.cols, cells: cells);
+      return layout.withCells(cells);
     }
     return null;
   }
@@ -496,7 +526,7 @@ class LevelGenerator {
     final cells = List<TileSpec?>.of(layout.cells);
     cells[matching] = layout.specOf(other);
     cells[other] = sm;
-    return PuzzleLayout(rows: layout.rows, cols: layout.cols, cells: cells);
+    return layout.withCells(cells);
   }
 
   static List<int> _neighbors(int i, int rows, int cols) {
@@ -563,13 +593,17 @@ class LevelGenerator {
     return false;
   }
 
-  bool _placeVoids(List<bool> isTile, int rows, int cols, int count, SeededRandom rng) {
+  /// Empties [count] cells above the bottom row, keeping every tile linked to
+  /// the bottom row. A lone parity void sits high on the board; [scatter]
+  /// spreads many holes evenly instead.
+  bool _placeVoids(List<bool> isTile, int rows, int cols, int count, SeededRandom rng, {bool scatter = false}) {
     if (count == 0) return true;
     if (rows < 2) return false;
-    final rowWeights = [for (var r = 0; r < rows - 1; r++) (rows - 1 - r).toDouble()];
+    final rowWeights = [for (var r = 0; r < rows - 1; r++) scatter ? 1.0 : (rows - 1 - r).toDouble()];
+    final tries = scatter ? 120 : 48;
     for (var v = 0; v < count; v++) {
       var placed = false;
-      for (var attempt = 0; attempt < 48 && !placed; attempt++) {
+      for (var attempt = 0; attempt < tries && !placed; attempt++) {
         final r = rng.pickWeighted(rowWeights);
         final i = r * cols + rng.nextInt(cols);
         if (!isTile[i]) continue;
@@ -585,19 +619,15 @@ class LevelGenerator {
     return true;
   }
 
-  List<int> _peel(int rows, int cols, List<bool> isTile, PeelStyle style, SeededRandom rng) {
+  /// A hidden winning order of picks that respects the arrows: a tile can be
+  /// picked once it is open, and picking it opens what its arrows point at.
+  List<int> _peel(int rows, int cols, List<bool> isTile, UnlockStructure structure, PeelStyle style, SeededRandom rng) {
     final n = rows * cols;
     final removed = List<bool>.filled(n, false);
+    final opened = List<bool>.generate(n, (i) => isTile[i] && structure.open[i]);
     final order = <int>[];
     final span = math.max(1, rows - 1);
-    bool isOpen(int i) {
-      if (!isTile[i] || removed[i]) return false;
-      if (i ~/ cols == rows - 1) return true;
-      for (final j in _neighbors(i, rows, cols)) {
-        if (removed[j]) return true;
-      }
-      return false;
-    }
+    bool isOpen(int i) => isTile[i] && !removed[i] && opened[i];
 
     while (true) {
       final open = [
@@ -625,6 +655,11 @@ class LevelGenerator {
       }
       removed[pick] = true;
       order.add(pick);
+      for (final d in Arrows.each) {
+        if (!Arrows.has(structure.dirs[pick], d)) continue;
+        final j = Arrows.target(pick, d, rows, cols);
+        if (j >= 0 && isTile[j]) opened[j] = true;
+      }
     }
     return order;
   }
@@ -685,13 +720,29 @@ class LevelGenerator {
       active.add(bottom + c);
     }
     var count = active.length;
+    final entrance = List<bool>.filled(n, false);
+    for (final e in active) {
+      entrance[e] = true;
+    }
+    // Each tile must be able to open what grows from it: no more children
+    // than one tile's arrows allow.
+    final maxKids = p.arrows.enabled ? p.arrows.maxArrows : 3;
     bool free(int i) {
       if (isTile[i] || i >= bottom) return false;
       var touching = 0;
+      var via = -1;
       for (final j in _neighbors(i, rows, cols)) {
-        if (isTile[j]) touching++;
+        if (isTile[j]) {
+          touching++;
+          via = j;
+        }
       }
       if (touching != 1) return false;
+      var degree = 0;
+      for (final k in _neighbors(via, rows, cols)) {
+        if (isTile[k]) degree++;
+      }
+      if ((entrance[via] ? degree : degree - 1) >= maxKids) return false;
       final r = i ~/ cols;
       final c = i % cols;
       for (var r0 = r - 1; r0 <= r; r0++) {

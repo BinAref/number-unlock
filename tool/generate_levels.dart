@@ -6,6 +6,7 @@ import 'dart:io';
 
 import 'package:unlock_numbers/core/generator/difficulty_curve.dart';
 import 'package:unlock_numbers/core/generator/level_forge.dart';
+import 'package:unlock_numbers/core/model/arrows.dart';
 import 'package:unlock_numbers/core/rules/rule_book.dart';
 
 void main(List<String> args) {
@@ -18,13 +19,24 @@ void main(List<String> args) {
   final book = RuleBook.fromJson(jsonDecode(File('assets/config/rules.json').readAsStringSync()) as Map<String, Object?>);
   final forge = LevelForge(curve: DifficultyCurve.fromJson(curveMap), book: book);
 
-  final probe = option('probe');
-  if (probe != null) {
-    final sw = Stopwatch()..start();
-    final p = forge.forge(probe);
-    final d = p.profile!;
-    stdout.writeln('level $probe: ${p.layout.rows}x${p.layout.cols} tiles ${d.tiles} slots ${d.minCapacity}${d.minCapacityProven ? '' : '?'} '
-        'score ${d.score} paths ${d.paths} avgRest ${d.avgRest.toStringAsFixed(2)} in ${sw.elapsed.inSeconds}s');
+  // --probe 25 or --probe 5,25,140: forge and describe those levels.
+  final probeAt = args.indexOf('--probe');
+  if (probeAt >= 0 && probeAt + 1 < args.length) {
+    for (final level in args[probeAt + 1].split(',').map(int.parse)) {
+      final sw = Stopwatch()..start();
+      final p = forge.forge(level);
+      final d = p.profile!;
+      final l = p.layout;
+      var stars = 0;
+      var doubles = 0;
+      for (final t in l.tileIndices) {
+        if (l.isStar(t)) stars++;
+        if (Arrows.count(l.dirs[t]) == 2) doubles++;
+      }
+      stdout.writeln('level $level: ${l.rows}x${l.cols} tiles ${d.tiles} open ${l.openAtStart.where((o) => o).length} '
+          'two-arrow $doubles stars $stars slots ${d.minCapacity}${d.minCapacityProven ? '' : '?'} '
+          'score ${d.score} paths ${d.paths} avgRest ${d.avgRest.toStringAsFixed(2)} in ${sw.elapsed.inMilliseconds}ms');
+    }
     return;
   }
 
@@ -44,7 +56,7 @@ void main(List<String> args) {
   body.write(']}\n');
   File('${dir.path}/pack_001.json').writeAsStringSync(body.toString());
   File('${dir.path}/index.json').writeAsStringSync(const JsonEncoder.withIndent('  ').convert({
-    'version': 2,
+    'version': 3,
     'rules': book.currentVersion,
     'total': count,
     'packs': [

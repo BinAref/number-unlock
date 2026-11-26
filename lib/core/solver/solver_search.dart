@@ -183,7 +183,7 @@ class SolverSearch {
       var score = removedCount > 0 ? 1000 + 10 * removedCount : 0;
       score -= 40 * child.length;
       var gain = 0;
-      for (final n in ctx.topology.neighbors[c]) {
+      for (final n in ctx.topology.targets[c]) {
         if (!SolverContext.isSet(_removed, n) && !_isOpen(n)) gain++;
       }
       score += 6 * gain;

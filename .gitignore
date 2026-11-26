@@ -46,3 +46,6 @@ app.*.map.json
 
 # Visual review renders (regenerate with: flutter test test_visual --update-goldens)
 test_visual/shots/
+
+# Shell crash dumps
+*.stackdump

@@ -7,6 +7,7 @@ import 'package:unlock_numbers/core/engine/game_engine.dart';
 import 'package:unlock_numbers/core/generator/difficulty_curve.dart';
 import 'package:unlock_numbers/core/generator/level_forge.dart';
 import 'package:unlock_numbers/core/levels/level_catalog.dart';
+import 'package:unlock_numbers/core/model/arrows.dart';
 import 'package:unlock_numbers/core/model/puzzle_definition.dart';
 import 'package:unlock_numbers/core/random/seeded_random.dart';
 import 'package:unlock_numbers/core/rules/rule_book.dart';
@@ -49,12 +50,28 @@ void main() {
     expect((detLog10(1000) - 3).abs(), lessThan(1e-12));
   });
 
-  test('the endless curve climbs to unique-solution 10 × 10 corridors', () {
+  test('the endless curve climbs to 10 × 10 arrow boards that need every slot', () {
     final p = curve.paramsFor(5000, SeededRandom(1));
     expect(p.rows, 10);
-    expect(p.shape, 'corridors');
-    expect(p.unique, isTrue);
+    expect(p.cols, 10);
     expect(p.targetCapacity, 5);
     expect(p.floorDepth, 3);
+    expect(p.arrows.enabled, isTrue);
+    expect(p.arrows.starRatio, greaterThan(0));
+  });
+
+  test('arrows are taught in stages: matching only, single, two-arrow, stars', () {
+    final forge = LevelForge(curve: curve, book: book);
+    for (final l in [1, 2, 3]) {
+      final layout = forge.forge(l).layout;
+      expect(layout.hasArrows, isFalse, reason: 'level $l is matching only');
+      expect(layout.openAtStart.where((o) => o).length, layout.tileCount);
+    }
+    final single = forge.forge(6).layout;
+    expect([for (final t in single.tileIndices) Arrows.count(single.dirs[t])], everyElement(1));
+    final twoArrow = forge.forge(15).layout;
+    expect(twoArrow.tileIndices.any(twoArrow.isStar), isFalse);
+    expect(twoArrow.tileIndices.any((t) => Arrows.count(twoArrow.dirs[t]) == 2), isTrue);
+    expect(curve.paramsFor(25, SeededRandom(1)).arrows.starRatio, greaterThan(0));
   });
 }

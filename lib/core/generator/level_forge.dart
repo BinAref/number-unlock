@@ -83,7 +83,7 @@ class _ForgeJob implements ComputeJob<PuzzleDefinition> {
         _bestPenalty = penalty;
         _best = r;
       }
-      if (penalty == 0) return _finish();
+      if (penalty <= LevelGenerator.closeEnough) return _finish();
     }
     return false;
   }

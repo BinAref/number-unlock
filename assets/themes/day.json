@@ -84,6 +84,8 @@
     "tile.swap": "#7DE6FF",
     "tile.match": "#FFFFFF",
     "tile.shadow": "#1B1742",
+    "tile.arrow": "#FFFFFF",
+    "tile.star": "#FFE27A",
 
     "slot.socket": "#45407A",
     "slot.socketLight": "#625D9C",

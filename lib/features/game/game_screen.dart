@@ -224,6 +224,8 @@ class _TileHost extends StatelessWidget {
                           match: match,
                           vanish: vanish,
                           dimmed: game.swapMode && !inTray,
+                          arrows: inTray ? 0 : game.engine.puzzle.layout.dirs[cell],
+                          star: !inTray && game.engine.puzzle.layout.isStar(cell),
                         ),
                       ),
                     );

@@ -24,15 +24,28 @@ class PuzzleDefinition {
     this.solution,
   });
 
+  /// Reads a puzzle saved with its arrows (`dirs`, `open`, `arrows`).
+  /// Puzzles saved before the arrow rule have no `open` field and are
+  /// rejected, so an old saved attempt is dropped instead of replayed under
+  /// the retired "open all four neighbours" rule.
   factory PuzzleDefinition.fromJson(Map<String, Object?> json) {
     final rows = readInt(json['rows']);
     final cols = readInt(json['cols']);
     final difficulty = json['difficulty'];
     final solution = json['solution'];
+    final open = readStringOrNull(json['open']);
+    if (open == null) throw const FormatException('Puzzle data predates the arrow rule.');
     return PuzzleDefinition(
       id: readString(json['id']),
       mode: PuzzleMode.values.firstWhere((m) => m.name == json['mode'], orElse: () => PuzzleMode.levels),
-      layout: PuzzleLayout.decode(rows, cols, readString(json['cells'])),
+      layout: PuzzleLayout.decode(
+        rows,
+        cols,
+        readString(json['cells']),
+        dirs: readStringOrNull(json['dirs']),
+        open: open,
+        arrows: readBool(json['arrows'], true),
+      ),
       rulesetVersion: readInt(json['rules'], 1),
       levelNumber: readIntOrNull(json['level']),
       challengeTier: readIntOrNull(json['tier']),
@@ -63,6 +76,9 @@ class PuzzleDefinition {
         'rows': layout.rows,
         'cols': layout.cols,
         'cells': layout.encodeCells(),
+        'dirs': layout.encodeDirs(),
+        'open': layout.encodeOpen(),
+        'arrows': layout.hasArrows,
         'rules': rulesetVersion,
         if (profile != null) 'difficulty': profile!.toJson(),
         if (includeSolution && solution != null) 'solution': solution,

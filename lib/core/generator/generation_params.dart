@@ -15,6 +15,61 @@ enum PeelStyle {
   mixed,
 }
 
+/// How a board's tiles open one another (see `UnlockStructureBuilder`).
+class ArrowParams {
+  const ArrowParams({
+    this.open = 'bottom',
+    this.maxArrows = 2,
+    this.twoRatio = 0.35,
+    this.starRatio = 0.25,
+    this.decoyRatio = 0.3,
+    this.branchiness = 0.45,
+  });
+
+  /// Every tile open and no arrows: the first, matching-only boards.
+  static const ArrowParams none = ArrowParams(open: 'all');
+
+  factory ArrowParams.fromJson(Map<String, Object?> json) => ArrowParams(
+        open: readString(json['open'], 'bottom'),
+        maxArrows: readInt(json['max'], 2).clamp(1, 2),
+        twoRatio: readDouble(json['two'], 0.35).clamp(0.0, 1.0),
+        starRatio: readDouble(json['star'], 0.25).clamp(0.0, 1.0),
+        decoyRatio: readDouble(json['decoy'], 0.3).clamp(0.0, 1.0),
+        branchiness: readDouble(json['branch'], 0.45).clamp(0.0, 1.0),
+      );
+
+  /// `all`: every tile open, no arrows; `bottom`: entrances in the bottom
+  /// row; `scatter`: entrances in the bottom row plus, at times, one higher
+  /// up the board.
+  final String open;
+
+  /// Most tiles one tile may open (1 in the single-arrow stage, else 2).
+  final int maxArrows;
+
+  /// Chance that a tile may open two others (when [maxArrows] is 2).
+  final double twoRatio;
+
+  /// Chance that a tile opening nobody becomes a star (0: stars not taught).
+  final double starRatio;
+
+  /// Chance that a tile opening one other carries a second, decoy arrow.
+  final double decoyRatio;
+
+  /// 0: long winding chains; 1: bushy trees of short branches.
+  final double branchiness;
+
+  bool get enabled => open != 'all';
+
+  Map<String, Object?> toJson() => {
+        'open': open,
+        'max': maxArrows,
+        'two': twoRatio,
+        'star': starRatio,
+        'decoy': decoyRatio,
+        'branch': branchiness,
+      };
+}
+
 /// Knobs for building one puzzle.
 class GenerationParams {
   const GenerationParams({
@@ -36,9 +91,11 @@ class GenerationParams {
     this.spread = false,
     this.shape = 'grid',
     this.fill = 0.55,
+    this.holes = 0,
     this.entrances = 2,
     this.floorDepth = 0,
     this.unique = false,
+    this.arrows = const ArrowParams(),
   });
 
   factory GenerationParams.fromJson(Map<String, Object?> json) => GenerationParams(
@@ -60,15 +117,18 @@ class GenerationParams {
         spread: readBool(json['spread']),
         shape: readString(json['shape'], 'grid'),
         fill: readDouble(json['fill'], 0.55),
+        holes: readDouble(json['holes']),
         entrances: readInt(json['entrances'], 2),
         floorDepth: readInt(json['floor']),
         unique: readBool(json['unique']),
+        arrows: ArrowParams.fromJson(readMap(json['arrows'])),
       );
 
   final int rows;
   final int cols;
 
-  /// Cells empty from the start (-1: automatic, one when rows × cols is odd).
+  /// Cells empty from the start (-1: automatic — [holes] for grids, else
+  /// one when rows × cols is odd).
   final int voids;
 
   /// Most tiles the hidden solution keeps waiting at once (1..capacity-1);
@@ -97,8 +157,7 @@ class GenerationParams {
   /// Local-search steps that rearrange tiles until fewer slots provably fail.
   final int hardenSteps;
 
-  /// Empty cells in the bottom row: they narrow the open frontier, which is
-  /// what makes wide boards demand more slots.
+  /// Empty cells in the bottom row (fewer possible entrances).
   final int bottomGaps;
 
   /// Place matching families far apart (annealed) instead of along a hidden
@@ -106,14 +165,18 @@ class GenerationParams {
   /// frontiers — the source of genuinely hard puzzles.
   final bool spread;
 
-  /// `grid` (full board) or `corridors`: a tree of one-tile-wide passages
-  /// inside the frame, so even a 10 × 10 board keeps a narrow, tense front.
+  /// `grid` (full board, minus [holes]) or `corridors`: a tree of
+  /// one-tile-wide passages inside the frame.
   final String shape;
 
   /// Share of the cells that become tiles in a corridor board.
   final double fill;
 
-  /// Corridor entrances in the bottom row.
+  /// Share of a grid board's cells left empty, scattered over the board.
+  final double holes;
+
+  /// Tiles open from the start (at least one per connected group of tiles);
+  /// corridor boards grow one passage from each.
   final int entrances;
 
   /// Once reached, the hidden solution never keeps fewer tiles waiting until
@@ -123,9 +186,12 @@ class GenerationParams {
   /// Drive the number of winning orders down to exactly one.
   final bool unique;
 
+  /// The arrow rule's settings for this board.
+  final ArrowParams arrows;
+
   int get targetCapacity => targetDepth + 1;
 
-  GenerationParams copyWith({int? rows, int? cols, int? targetDepth, int? hardenSteps, int? minScore, int? maxScore}) =>
+  GenerationParams copyWith({int? rows, int? cols, int? targetDepth, int? hardenSteps, int? minScore, int? maxScore, ArrowParams? arrows}) =>
       GenerationParams(
         rows: rows ?? this.rows,
         cols: cols ?? this.cols,
@@ -145,9 +211,11 @@ class GenerationParams {
         spread: spread,
         shape: shape,
         fill: fill,
+        holes: holes,
         entrances: entrances,
         floorDepth: floorDepth,
         unique: unique,
+        arrows: arrows ?? this.arrows,
       );
 
   Map<String, Object?> toJson() => {
@@ -167,5 +235,12 @@ class GenerationParams {
         'harden': hardenSteps,
         'gaps': bottomGaps,
         'spread': spread,
+        'shape': shape,
+        'fill': fill,
+        'holes': holes,
+        'entrances': entrances,
+        'floor': floorDepth,
+        'unique': unique,
+        'arrows': arrows.toJson(),
       };
 }

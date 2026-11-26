@@ -3,6 +3,7 @@ import 'dart:ui' as ui;
 
 import 'package:flutter/widgets.dart';
 
+import '../../core/model/arrows.dart';
 import '../../services/theme_service.dart';
 import 'glyphs.dart';
 import 'paint_kit.dart';
@@ -18,7 +19,15 @@ class TileLook {
     this.vanish = 0,
     this.lifted = 0,
     this.dimmed = false,
+    this.arrows = 0,
+    this.star = false,
   });
+
+  /// The arrow rule: which edges this tile opens through (an [Arrows] mask).
+  final int arrows;
+
+  /// A tile that opens nothing (no arrows on an arrow board).
+  final bool star;
 
   /// Locked: dimmed with a lock badge — number and colour stay readable.
   final bool locked;
@@ -113,6 +122,7 @@ class TilePainter extends CustomPainter {
     }
 
     _number(canvas, c, s, fade * (look.locked ? 0.82 : 1));
+    if (look.arrows != Arrows.none || look.star) _marks(canvas, rect, s, fade);
 
     if (look.locked) {
       final badge = Offset(rect.right - s * 0.2, rect.bottom - s * 0.2);
@@ -146,6 +156,44 @@ class TilePainter extends CustomPainter {
     }
     if (look.dimmed) canvas.drawRRect(rr, Paint()..color = alpha(t.color('tile.locked'), 0.35));
     canvas.restore();
+  }
+
+  /// The arrow rule's marks: a chevron at each edge the tile opens through,
+  /// or a small star in the corner when it opens nothing. Both stay clear
+  /// of the number and of the lock badge.
+  void _marks(Canvas canvas, Rect rect, double s, double fade) {
+    final fill = Paint()..color = alpha(t.color('tile.arrow'), fade);
+    final edge = Paint()
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = math.max(1.2, s * 0.025)
+      ..strokeJoin = StrokeJoin.round
+      ..color = alpha(t.color('tile.numberStroke'), 0.9 * fade);
+    final c = rect.center;
+    final reach = rect.width / 2 - s * 0.075;
+    final depth = s * 0.09;
+    final half = s * 0.1;
+    void chevron(Offset dir) {
+      final tip = c + dir * reach;
+      final base = c + dir * (reach - depth);
+      final side = Offset(-dir.dy, dir.dx) * half;
+      final path = Path()
+        ..moveTo(tip.dx, tip.dy)
+        ..lineTo(base.dx + side.dx, base.dy + side.dy)
+        ..lineTo(base.dx - side.dx, base.dy - side.dy)
+        ..close();
+      canvas.drawPath(path, fill);
+      canvas.drawPath(path, edge);
+    }
+
+    if (Arrows.has(look.arrows, Arrows.up)) chevron(const Offset(0, -1));
+    if (Arrows.has(look.arrows, Arrows.right)) chevron(const Offset(1, 0));
+    if (Arrows.has(look.arrows, Arrows.down)) chevron(const Offset(0, 1));
+    if (Arrows.has(look.arrows, Arrows.left)) chevron(const Offset(-1, 0));
+    if (look.star) {
+      final star = starPath(Offset(rect.left + s * 0.2, rect.top + s * 0.2), s * 0.1, inner: 0.5, points: 8);
+      canvas.drawPath(star, Paint()..color = alpha(t.color('tile.star'), fade));
+      canvas.drawPath(star, edge);
+    }
   }
 
   void _number(Canvas canvas, Offset c, double s, double opacity) {
@@ -196,5 +244,7 @@ class TilePainter extends CustomPainter {
       old.look.match != look.match ||
       old.look.vanish != look.vanish ||
       old.look.lifted != look.lifted ||
-      old.look.dimmed != look.dimmed;
+      old.look.dimmed != look.dimmed ||
+      old.look.arrows != look.arrows ||
+      old.look.star != look.star;
 }
