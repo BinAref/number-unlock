@@ -50,7 +50,18 @@ class CurveBand {
     required this.vaultGrids,
     required this.vaultDepth,
     required this.vaultHarden,
+    this.shape = 'grid',
+    this.fill = const [0.55, 0.55],
+    this.entrances = const [2, 2],
+    this.floor = const [0, 0],
+    this.unique = false,
   });
+
+  final String shape;
+  final List<double> fill;
+  final List<double> entrances;
+  final List<double> floor;
+  final bool unique;
 
   factory CurveBand.fromJson(Map<String, Object?> json) {
     List<double> pair(Object? v, double a, double b) {
@@ -83,6 +94,11 @@ class CurveBand {
       vaultGrids: [for (final g in readList(json['vaultGrids'])) GridChoice.fromJson(g)],
       vaultDepth: readInt(json['vaultDepth']),
       vaultHarden: readInt(json['vaultHarden']),
+      shape: readString(json['shape'], 'grid'),
+      fill: pair(json['fill'], 0.55, 0.55),
+      entrances: pair(json['entrances'], 2, 2),
+      floor: pair(json['floor'], 0, 0),
+      unique: readBool(json['unique']),
     );
   }
 
@@ -145,6 +161,11 @@ class CurveBand {
       requireProof: proof || useVault,
       spread: useVault || rng.chance(_lerp(spread, t)),
       hardenSteps: hardenSteps,
+      shape: shape,
+      fill: _lerp(fill, t),
+      entrances: _lerp(entrances, t).round(),
+      floorDepth: _lerp(floor, t).round(),
+      unique: unique,
     );
   }
 }

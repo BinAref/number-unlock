@@ -29,6 +29,54 @@ int hash32(int input) {
   return x & 0xFFFFFFFF;
 }
 
+/// e^(-x) for x >= 0 using only + − × ÷, so every platform computes the
+/// very same bits (library exp/log may differ in the last digit between the
+/// Dart VM and JavaScript, which would make generated levels diverge).
+double detExpNeg(double x) {
+  if (x <= 0) return 1;
+  if (x > 40) return 0;
+  var y = x;
+  var halvings = 0;
+  while (y > 0.5) {
+    y /= 2;
+    halvings++;
+  }
+  var term = 1.0;
+  var sum = 1.0;
+  for (var n = 1; n <= 12; n++) {
+    term *= -y / n;
+    sum += term;
+  }
+  for (var i = 0; i < halvings; i++) {
+    sum *= sum;
+  }
+  return sum;
+}
+
+/// log10(x) for x > 0 with the same guarantee as [detExpNeg].
+double detLog10(double x) {
+  if (x <= 0) return -400;
+  var m = x;
+  var e = 0;
+  while (m >= 2) {
+    m /= 2;
+    e++;
+  }
+  while (m < 1) {
+    m *= 2;
+    e--;
+  }
+  final z = (m - 1) / (m + 1);
+  final z2 = z * z;
+  var term = z;
+  var sum = 0.0;
+  for (var n = 1; n <= 25; n += 2) {
+    sum += term / n;
+    term *= z2;
+  }
+  return (2 * sum + e * 0.6931471805599453) / 2.302585092994046;
+}
+
 /// Combines two values into one 32-bit seed.
 int combineSeeds(int a, int b) => hash32((a & 0xFFFFFFFF) ^ mul32(b & 0xFFFFFFFF, 0x9E3779B1));
 

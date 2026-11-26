@@ -7,6 +7,7 @@ import '../core/boosters/booster_system.dart';
 import '../core/challenge/challenge_system.dart';
 import '../core/economy/economy_rules.dart';
 import '../core/generator/difficulty_curve.dart';
+import '../core/generator/level_forge.dart';
 import '../core/levels/level_catalog.dart';
 import '../core/rules/rule_book.dart';
 import '../core/util/json_read.dart';
@@ -14,6 +15,7 @@ import 'audio_service.dart';
 import 'compute_scheduler.dart';
 import 'localization_service.dart';
 import 'monetization.dart';
+import 'level_service.dart';
 import 'player_service.dart';
 import 'save_system.dart';
 import 'storage.dart';
@@ -84,6 +86,10 @@ class AppServices {
     await audioService.init();
     final levelIndex = LevelIndex.fromJson(await json('assets/levels/index.json'));
     final challengeCurve = DifficultyCurve.fromJson(await json('assets/config/challenge_curve.json'), bandsKey: 'tiers');
+    final rulesRaw = await b.loadString('assets/config/rules.json');
+    final curveRaw = await b.loadString('assets/config/level_curve.json');
+    final curveMap = readMap(jsonDecode(curveRaw));
+    final scheduler = ComputeScheduler(slice: Duration(milliseconds: readInt(solver['sliceMs'], 7)));
     return AppServices._(
       config: config,
       rules: rules,
@@ -101,9 +107,18 @@ class AppServices {
       haptics: HapticsService(enabled: settings.vibration),
       ads: MockRewardedAds(seconds: config.adSeconds),
       purchases: MockPurchases.fromJson(await json('assets/config/store.json'), delay: Duration(milliseconds: config.purchaseDelayMs)),
-      levels: LevelCatalog(levelIndex, (file) => b.loadString('assets/levels/$file')),
+      levels: LevelService(
+        bundled: LevelCatalog(levelIndex, (file) => b.loadString('assets/levels/$file')),
+        forge: LevelForge(curve: DifficultyCurve.fromJson(curveMap), book: rules),
+        store: save.store,
+        scheduler: scheduler,
+        version: readInt(curveMap['generator'], 2),
+        lookahead: readInt(curveMap['lookahead'], 10),
+        rulesJson: rulesRaw,
+        curveJson: curveRaw,
+      ),
       challenges: ChallengeDirector(curve: challengeCurve, rules: rules.current),
-      compute: ComputeScheduler(slice: Duration(milliseconds: readInt(solver['sliceMs'], 7))),
+      compute: scheduler,
     );
   }
 
@@ -123,7 +138,7 @@ class AppServices {
   final HapticsService haptics;
   final RewardedAdsService ads;
   final PurchaseService purchases;
-  final LevelCatalog levels;
+  final LevelService levels;
   final ChallengeDirector challenges;
   final ComputeScheduler compute;
 

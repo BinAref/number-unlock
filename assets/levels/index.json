@@ -1,59 +1,12 @@
 {
-  "version": 1,
-  "generator": 1,
+  "version": 2,
   "rules": 1,
-  "total": 1000,
-  "packSize": 100,
+  "total": 10,
   "packs": [
     {
       "file": "pack_001.json",
       "from": 1,
-      "to": 100
-    },
-    {
-      "file": "pack_002.json",
-      "from": 101,
-      "to": 200
-    },
-    {
-      "file": "pack_003.json",
-      "from": 201,
-      "to": 300
-    },
-    {
-      "file": "pack_004.json",
-      "from": 301,
-      "to": 400
-    },
-    {
-      "file": "pack_005.json",
-      "from": 401,
-      "to": 500
-    },
-    {
-      "file": "pack_006.json",
-      "from": 501,
-      "to": 600
-    },
-    {
-      "file": "pack_007.json",
-      "from": 601,
-      "to": 700
-    },
-    {
-      "file": "pack_008.json",
-      "from": 701,
-      "to": 800
-    },
-    {
-      "file": "pack_009.json",
-      "from": 801,
-      "to": 900
-    },
-    {
-      "file": "pack_010.json",
-      "from": 901,
-      "to": 1000
+      "to": 10
     }
   ]
 }

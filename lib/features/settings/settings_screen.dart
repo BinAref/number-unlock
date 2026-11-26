@@ -8,6 +8,9 @@ import '../../ui/kit/widgets.dart';
 import '../common/page_frame.dart';
 import '../home/home_screen.dart';
 
+/// The player's profile card: emblem, name and journey records.
+void showProfile(BuildContext context) => SettingsScreen._card(context);
+
 class SettingsScreen extends StatelessWidget {
   const SettingsScreen({super.key});
 
@@ -65,6 +68,35 @@ class SettingsScreen extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static void _card(BuildContext context) {
+    final s = Services.of(context, listen: false);
+    final i18n = s.i18n;
+    final p = s.player;
+    final t = s.theme.tokens;
+    Widget stat(Glyph g, String key, int value) => Padding(
+          padding: const EdgeInsets.symmetric(vertical: 4),
+          child: Row(children: [
+            GlyphIcon(g, size: 18, color: t.color('gold.light')),
+            const SizedBox(width: 10),
+            Expanded(child: Text(i18n.t(key), style: UiText.style(context, size: 15))),
+            Text('$value', style: UiText.numbers(context, size: 16, color: t.color('text.accent'))),
+          ]),
+        );
+    showStoneDialog<void>(context, title: p.profile.name ?? i18n.t('profile.defaultName'), builder: (context) => Column(mainAxisSize: MainAxisSize.min, children: [
+          stat(Glyph.lock, 'profile.stage', p.progress.highestUnlocked),
+          stat(Glyph.sparkle, 'profile.stars', p.progress.totalStars),
+          stat(Glyph.plus, 'profile.coins', p.coins),
+          stat(Glyph.trophy, 'profile.best', p.bestScore),
+          stat(Glyph.hint, 'profile.bestTier', p.bestTier),
+          stat(Glyph.check, 'profile.solved', p.challengesSolved),
+          const SizedBox(height: 14),
+          StoneButton(label: i18n.t('profile.edit'), glyph: Glyph.user, onTap: () {
+            Navigator.pop(context);
+            _profile(context);
+          }),
+        ]));
   }
 
   static Future<void> _open(String url) async {

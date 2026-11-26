@@ -207,5 +207,23 @@
   "rule.triple_sum10_distinct.title": "Three of a kind of ten",
   "rule.triple_sum10_distinct.body": "Three neighbours of three different colours that add up to 10 disappear.",
 
+  "home.stage": "Stage {n}",
+  "levels.forging": "Forging stage {n}…",
+  "profile.stage": "Stage reached",
+  "profile.stars": "Stars collected",
+  "profile.coins": "Coins",
+  "profile.best": "Best challenge score",
+  "profile.bestTier": "Highest challenge difficulty",
+  "profile.solved": "Challenges solved",
+  "profile.edit": "Edit name & emblem",
+  "challenge.score": "Score {n}",
+  "challenge.points": "+{n} points",
+  "challenge.accuracy": "Accuracy {p}%",
+  "challenge.runTotal": "Run total: {n}",
+  "challenge.best": "Best: {n}",
+  "challenge.newBest": "New record!",
+  "challenge.counting": "Counting your points…",
+  "challenge.scoring": "Every pick is judged against the perfect path: perfect picks earn full points, other picks less, and a lost puzzle earns zero.",
+
   "toast.coinsAdded": "+{n} coins"
 }

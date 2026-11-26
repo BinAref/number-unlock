@@ -44,7 +44,8 @@ void openShop(BuildContext context) => Navigator.push(context, portalRoute(const
 /// Opens a fixed level: resumes its saved attempt (or restarts on request).
 Future<void> playLevel(BuildContext context, int level, {bool replace = false, bool askResume = true}) async {
   final s = Services.of(context, listen: false);
-  final puzzle = await s.levels.level(level);
+  final puzzle = await _withForging(context, level);
+  if (puzzle == null) return;
   final saved = await s.save.loadAttempt(PuzzleMode.levels.key);
   var resume = saved != null && saved.puzzle.levelNumber == level && saved.puzzle.layout == puzzle.layout ? saved : null;
   if (!context.mounted) return;
@@ -71,6 +72,27 @@ Future<void> playLevel(BuildContext context, int level, {bool replace = false, b
   } else {
     await Navigator.push(context, route);
   }
+}
+
+/// Loads a level, showing the forge while a new one is being made.
+Future<PuzzleDefinition?> _withForging(BuildContext context, int level) async {
+  final s = Services.of(context, listen: false);
+  if (await s.levels.isReady(level)) return s.levels.level(level);
+  if (!context.mounted) return null;
+  final nav = Navigator.of(context);
+  final dialog = showStoneDialog<void>(
+    context,
+    dismissible: false,
+    builder: (context) => Column(mainAxisSize: MainAxisSize.min, children: [
+      SizedBox(width: 110, height: 110, child: Loop(period: const Duration(seconds: 3), builder: (context, ph) => CustomPaint(painter: CrystalPainter(s.theme.tokens, ph)))),
+      const SizedBox(height: 10),
+      Text(s.i18n.t('levels.forging', {'n': level}), textAlign: TextAlign.center, style: UiText.style(context, size: 16)),
+    ]),
+  );
+  final puzzle = await s.levels.level(level);
+  if (nav.mounted) nav.pop();
+  await dialog;
+  return puzzle;
 }
 
 /// Continues the saved challenge, or forges the puzzle of the run's tier.

@@ -175,7 +175,19 @@ Future<void> showWinDialog(BuildContext context, GameController game) {
         ),
         if (game.stars == 3) Text(i18n.t('win.perfect'), style: UiText.style(context, size: 16, color: t.color('text.accent'))),
       ] else
-        Text(i18n.t('challenge.solved', {'n': game.run?.solved ?? 0}), style: UiText.style(context, size: 16)),
+        ListenableBuilder(
+          listenable: game,
+          builder: (context, _) => Column(children: [
+            if (game.scoring)
+              Text(i18n.t('challenge.counting'), style: UiText.style(context, size: 15, color: t.color('text.muted')))
+            else ...[
+              Text(i18n.t('challenge.points', {'n': game.puzzlePoints ?? 0}), style: UiText.numbers(context, size: 26, color: t.color('text.accent'))),
+              Text(i18n.t('challenge.accuracy', {'p': ((game.sheet?.quality ?? 0) * 100).round()}), style: UiText.style(context, size: 14)),
+              Text(i18n.t('challenge.runTotal', {'n': game.run?.score ?? 0}), style: UiText.numbers(context, size: 16)),
+              if (game.newBest) Text(i18n.t('challenge.newBest'), style: UiText.style(context, size: 16, color: t.color('ui.success'))),
+            ],
+          ]),
+        ),
       const SizedBox(height: 12),
       if (reward != null)
         Row(mainAxisAlignment: MainAxisAlignment.center, children: [
@@ -234,6 +246,8 @@ Future<void> showLoseDialog(BuildContext context, GameController game) {
         return Column(mainAxisSize: MainAxisSize.min, children: [
           Text(i18n.t(game.engine.lossReason == LossReason.leftovers ? 'lose.leftovers' : 'lose.trayFull'),
               textAlign: TextAlign.center, style: UiText.style(context, size: 16)),
+          if (challenge) Text(i18n.t('challenge.runTotal', {'n': game.run?.score ?? 0}), style: UiText.numbers(context, size: 16)),
+          if (challenge) Text(i18n.t('challenge.best', {'n': s.player.bestScore}), style: UiText.numbers(context, size: 14)),
           const SizedBox(height: 14),
           if (game.rescueChecking)
             Text(i18n.t('lose.checking'), style: UiText.style(context, size: 14, color: s.theme.tokens.color('text.muted')))

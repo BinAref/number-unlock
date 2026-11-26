@@ -18,6 +18,8 @@ class DifficultyProfile {
     this.avgMatchGap = 0,
     this.longestPushRun = 0,
     this.tiles = 0,
+    this.avgRest = 0,
+    this.paths = -1,
   });
 
   factory DifficultyProfile.fromJson(Map<String, Object?> json) => DifficultyProfile(
@@ -34,6 +36,8 @@ class DifficultyProfile {
         avgMatchGap: readDouble(json['matchGap']),
         longestPushRun: readInt(json['planRun']),
         tiles: readInt(json['tiles']),
+        avgRest: readDouble(json['avgRest']),
+        paths: readInt(json['paths'], -1),
       );
 
   /// 0 (trivial) .. 100 (fiendish).
@@ -72,6 +76,14 @@ class DifficultyProfile {
   final int longestPushRun;
   final int tiles;
 
+  /// Average tiles waiting in the tray along the solution (slots kept busy).
+  final double avgRest;
+
+  /// Winning orders with five slots (1 = a unique solution, -1 = not counted).
+  final int paths;
+
+  bool get uniqueSolution => paths == 1;
+
   /// Tiles that must wait in the tray at once for the easiest solution.
   int get minRestDepth => minCapacity - 1;
 
@@ -89,6 +101,8 @@ class DifficultyProfile {
         'matchGap': _round(avgMatchGap),
         'planRun': longestPushRun,
         'tiles': tiles,
+        'avgRest': _round(avgRest),
+        'paths': paths,
       };
 
   static double _round(double v) => (v * 1000).round() / 1000;

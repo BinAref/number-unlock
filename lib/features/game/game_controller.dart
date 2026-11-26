@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/foundation.dart';
 
 import '../../core/boosters/booster_system.dart';
+import '../../core/challenge/challenge_scorer.dart';
 import '../../core/challenge/challenge_system.dart';
 import '../../core/economy/wallet.dart';
 import '../../core/engine/game_engine.dart';
@@ -45,6 +46,10 @@ class GameController extends ChangeNotifier {
     _ctx = SolverContext(engine.puzzle.layout, rules);
     tray = [for (final c in engine.trayItems) TrayEntry(c)];
     _attempt = '${puzzle.id}@${DateTime.now().microsecondsSinceEpoch}';
+    if (puzzle.mode == PuzzleMode.challenge) {
+      sheet = ScoreSheet();
+      _scorer = ChallengeScorer(_ctx);
+    }
     if (engine.status == GameStatus.lost) {
       ended = GameStatus.lost;
       scheduleMicrotask(_analyseRescue);
@@ -77,6 +82,14 @@ class GameController extends ChangeNotifier {
   WinReward? reward;
   int stars = 0;
   bool _disposed = false;
+
+  /// Challenge scoring: every pick graded against the perfect path.
+  ScoreSheet? sheet;
+  ChallengeScorer? _scorer;
+  Future<void> _grading = Future<void>.value();
+  bool scoring = false;
+  int? puzzlePoints;
+  bool newBest = false;
 
   /// Reports a localisation key to show as a short message.
   void Function(String key, [Map<String, Object?> args])? onMessage;
@@ -136,8 +149,10 @@ class GameController extends ChangeNotifier {
       return;
     }
     final value = engine.specOf(cell).value;
+    final before = (engine.board.removedCells, engine.trayItems, engine.capacity, hintCell == cell);
     final result = engine.extract(cell);
     if (!result.accepted) return;
+    _grade(before.$1, before.$2, before.$3, cell, hinted: before.$4);
     _busy = true;
     hintCell = null;
     services.audio.pick(value);
@@ -158,6 +173,19 @@ class GameController extends ChangeNotifier {
     }
     _end(result.status);
     _notify();
+  }
+
+  void _grade(List<int> removed, List<int> tray, int capacity, int cell, {required bool hinted}) {
+    final sheet = this.sheet;
+    final scorer = _scorer;
+    if (sheet == null || scorer == null) return;
+    if (hinted) {
+      sheet.grades.add(MoveGrade.hinted);
+      return;
+    }
+    _grading = _grading.then((_) async {
+      sheet.grades.add(await services.compute.run(scorer.grade(removed: removed, tray: tray, move: cell, capacity: capacity), units: 400));
+    });
   }
 
   Future<void> _playMatches(List<MatchStep> steps) async {
@@ -188,6 +216,11 @@ class GameController extends ChangeNotifier {
       _onWin();
     } else if (status == GameStatus.lost) {
       ended = GameStatus.lost;
+      final r = run;
+      if (r != null) {
+        puzzlePoints = 0;
+        newBest = services.player.recordRunScore(r.score, r.tier);
+      }
       services.audio.play(Sfx.lose, volume: 0.6);
       services.haptics.heavy();
       _analyseRescue();
@@ -204,12 +237,23 @@ class GameController extends ChangeNotifier {
         minRest: puzzle.profile?.minRestDepth ?? engine.peakRest,
       );
       reward = services.player.recordLevelWin(level: puzzle.levelNumber ?? 1, stars: stars, totalLevels: services.levels.total);
+      services.levels.ensureAhead(services.player.progress.highestUnlocked);
     } else {
       final r = run;
       reward = services.player.recordChallengeWin(tier: puzzle.challengeTier ?? 1, seed: puzzle.seed ?? 0);
       if (r != null) {
+        final tier = puzzle.challengeTier ?? r.tier;
         r.advance(ChallengeDirector.freshSeed(DateTime.now().microsecondsSinceEpoch & 0xFFFFFFFF, r.solved + 1), puzzle.layout.fingerprint());
-        services.save.saveChallengeRun(r);
+        scoring = true;
+        _grading.then((_) {
+          final points = sheet?.pointsFor(tier) ?? 0;
+          puzzlePoints = points;
+          r.score += points;
+          services.save.saveChallengeRun(r);
+          newBest = services.player.recordRunScore(r.score, tier);
+          scoring = false;
+          _notify();
+        });
       }
     }
   }
@@ -259,6 +303,7 @@ class GameController extends ChangeNotifier {
         if (o != AdOutcome.rewarded) return _mapAd(o);
       }
       engine.addSlot();
+      sheet?.usedSlot = true;
       services.audio.play(Sfx.slotOpen);
       _persist();
       if (ended == GameStatus.lost && engine.status == GameStatus.playing) {
@@ -348,6 +393,7 @@ class GameController extends ChangeNotifier {
     swapMode = false;
     swapFirst = null;
     final result = engine.swap(first, slot);
+    sheet?.usedSwap = true;
     final a = tray[first];
     tray[first] = tray[slot];
     tray[slot] = a;

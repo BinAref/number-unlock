@@ -37,6 +37,10 @@ class Hardener {
   PuzzleLayout _layout;
   List<int> _witness;
   late int _k;
+  bool _uniqueStage = false;
+
+  /// Fewest slots proven necessary so far (counts reached zero below it).
+  int _floor = 2;
   double? _count;
   late PuzzleLayout _best;
   late List<int> _bestWitness;
@@ -45,17 +49,30 @@ class Hardener {
   bool _done = false;
   Candidate? _result;
 
-  Candidate get result => _result ?? Candidate(_layout, _witness);
+  Candidate get result => _result ?? Candidate(_layout, _witness, _floor);
+
+  int get _stageCapacity => _uniqueStage ? _gen.baseCapacity : _k;
+
+  /// Winning orders wanted at the end of the stage: none below the target,
+  /// exactly one in the final "unique solution" stage.
+  double get _goal => _uniqueStage ? 1 : 0;
 
   void _nextStage() {
+    if (_uniqueStage) return _finish();
     _k++;
-    if (_k >= _target) return _finish();
-    _count = _gen._countPaths(_layout, _k);
+    if (_k >= _target) {
+      if (!_p.unique) return _finish();
+      _uniqueStage = true;
+    }
+    _count = _gen._countPaths(_layout, _stageCapacity);
     if (_count == null) return _finish();
     _best = _layout;
     _bestWitness = _witness;
     _bestCount = _count!;
-    if (_count == 0) _nextStage();
+    if (_count! <= _goal) {
+      if (!_uniqueStage) _floor = _k + 1;
+      _nextStage();
+    }
   }
 
   void _finish() {
@@ -67,7 +84,7 @@ class Hardener {
       _gen._recolor(cells, layout.rows, layout.cols, _p.colorCount, _rng);
       layout = PuzzleLayout(rows: layout.rows, cols: layout.cols, cells: cells);
     }
-    _result = Candidate(layout, List<int>.unmodifiable(_witness));
+    _result = Candidate(layout, List<int>.unmodifiable(_witness), _floor);
   }
 
   /// One mutation attempt; returns true when hardening is over.
@@ -80,7 +97,7 @@ class Hardener {
       return true;
     }
     _steps++;
-    final k = _k;
+    final k = _stageCapacity;
     PuzzleLayout? next;
     if (_rng.chance(0.5)) {
       final cheap = PuzzleSolver(SolverContext(_layout, _gen.rules)).solve(capacity: k, nodeBudget: 20000);
@@ -91,9 +108,10 @@ class Hardener {
     }
     next ??= _gen._swapRandom(_layout, _rng);
     if (next == null) return false;
-    if (k > 2 && _gen._countPaths(next, k - 1) != 0) return false;
+    final guard = _uniqueStage ? _target - 1 : k - 1;
+    if (guard >= 2 && _gen._countPaths(next, guard) != 0) return false;
     final c = _gen._countPaths(next, k);
-    if (c == null) return false;
+    if (c == null || c < _goal) return false;
     final count = _count!;
     final accept = c < count || (c == count && _rng.chance(0.35)) || _rng.chance(0.02);
     if (!accept) return false;
@@ -107,7 +125,8 @@ class Hardener {
       _bestWitness = _witness;
       _bestCount = c;
     }
-    if (c == 0) {
+    if (c <= _goal) {
+      if (!_uniqueStage) _floor = k + 1;
       _nextStage();
       return _done;
     }
@@ -174,6 +193,7 @@ class GenerationJob implements ComputeJob<GeneratedPuzzle?> {
       rulesetVersion: generator.rulesetVersion,
       seed: _rng.nextUint32(),
       witness: candidate.witness,
+      minCapacityFloor: candidate.provenFloor,
     );
     if (report == null) return;
     final penalty = LevelGenerator.penaltyFor(report.profile, params);
@@ -193,10 +213,13 @@ class GenerationJob implements ComputeJob<GeneratedPuzzle?> {
 
 /// A layout plus the hidden order of picks it was built around.
 class Candidate {
-  const Candidate(this.layout, this.witness);
+  const Candidate(this.layout, this.witness, [this.provenFloor = 2]);
 
   final PuzzleLayout layout;
   final List<int> witness;
+
+  /// Fewest slots already proven necessary (fewer were shown impossible).
+  final int provenFloor;
 }
 
 class GeneratedPuzzle {
@@ -274,12 +297,16 @@ class LevelGenerator {
     if (n - gaps - voids < 2) return null;
 
     final isTile = List<bool>.filled(n, true);
-    if (!_placeBottomGaps(isTile, rows, cols, gaps, rng)) return null;
-    if (!_placeVoids(isTile, rows, cols, voids, rng)) return null;
+    if (p.shape == 'corridors') {
+      if (!_carve(isTile, rows, cols, p, rng)) return null;
+    } else {
+      if (!_placeBottomGaps(isTile, rows, cols, gaps, rng)) return null;
+      if (!_placeVoids(isTile, rows, cols, voids, rng)) return null;
+    }
     if (p.spread) return _buildSpread(p, rng, isTile, rows, cols);
     final order = _peel(rows, cols, isTile, p.peel, rng);
     final depth = math.max(1, math.min(p.targetDepth, order.length ~/ 2));
-    final walk = _walk(order.length, depth, p.minPeakVisits, p.climb, rng);
+    final walk = _walk(order.length, depth, p.minPeakVisits, p.climb, rng, floor: math.min(p.floorDepth, depth - 1));
     if (walk == null) return null;
     final specs = _assignSpecs(walk, p, rng);
     if (specs == null) return null;
@@ -408,7 +435,7 @@ class LevelGenerator {
       label[a] = label[b];
       label[b] = la;
       final delta = cellCost(a) + cellCost(b) - before;
-      if (delta > 0 && !rng.chance(math.exp(-delta / temp))) {
+      if (delta > 0 && !rng.chance(detExpNeg(delta / temp))) {
         label[b] = label[a];
         label[a] = la;
       }
@@ -586,11 +613,11 @@ class LevelGenerator {
       switch (mode) {
         case PeelStyle.layered:
           pick = open[rng.pickWeighted([
-            for (final i in open) 1 + 4 * math.pow((i ~/ cols) / span, 2).toDouble(),
+            for (final i in open) 1 + 4 * ((i ~/ cols) / span) * ((i ~/ cols) / span),
           ])];
         case PeelStyle.deep:
           pick = open[rng.pickWeighted([
-            for (final i in open) 1 + 4 * math.pow((rows - 1 - i ~/ cols) / span, 2).toDouble(),
+            for (final i in open) 1 + 4 * ((rows - 1 - i ~/ cols) / span) * ((rows - 1 - i ~/ cols) / span),
           ])];
         case PeelStyle.random:
         case PeelStyle.mixed:
@@ -604,31 +631,102 @@ class LevelGenerator {
 
   /// A sequence of push (true) / match (false) steps whose height never
   /// exceeds [depth] and ends at zero.
-  List<bool>? _walk(int n, int depth, int minPeaks, double climb, SeededRandom rng) {
+  List<bool>? _walk(int n, int depth, int minPeaks, double climb, SeededRandom rng, {int floor = 0}) {
     if (n.isOdd || n < 2) return null;
     for (var attempt = 0; attempt < 80; attempt++) {
       final out = <bool>[];
       var h = 0;
       var peaks = 0;
       var top = 0;
+      var reached = floor <= 0;
+      var ok = true;
       for (var i = 0; i < n; i++) {
         final left = n - i;
         final canPush = h < depth && h + 1 <= left - 1;
-        final canPop = h > 0;
+        // Once the floor is reached, stay at or above it until the end.
+        final canPop = h > 0 && (!reached || h > floor || left <= h);
         bool push;
         if (canPush && canPop) {
           push = rng.chance(0.5 + 0.4 * climb * (1 - h / depth));
-        } else {
+        } else if (canPush || canPop) {
           push = canPush;
+        } else {
+          ok = false;
+          break;
         }
         h += push ? 1 : -1;
         out.add(push);
         if (h > top) top = h;
+        if (h >= floor) reached = true;
         if (push && h == depth) peaks++;
       }
-      if (h == 0 && top == depth && peaks >= minPeaks) return out;
+      if (ok && h == 0 && top == depth && peaks >= minPeaks) return out;
     }
     return null;
+  }
+
+  /// Carves a tree of one-tile-wide corridors from bottom-row entrances
+  /// (no loops, no 2 × 2 blocks), so the open front stays narrow even on
+  /// a 10 × 10 frame: branches, dead ends and long detours make the order
+  /// of picks matter.
+  bool _carve(List<bool> isTile, int rows, int cols, GenerationParams p, SeededRandom rng) {
+    final n = rows * cols;
+    isTile.fillRange(0, n, false);
+    var target = (n * p.fill).round();
+    if (target.isOdd) target--;
+    final bottom = (rows - 1) * cols;
+    final columns = List<int>.generate(cols, (c) => c);
+    rng.shuffle(columns);
+    final active = <int>[];
+    for (final c in columns) {
+      if (active.length >= math.max(1, p.entrances)) break;
+      if ((c > 0 && isTile[bottom + c - 1]) || (c < cols - 1 && isTile[bottom + c + 1])) continue;
+      isTile[bottom + c] = true;
+      active.add(bottom + c);
+    }
+    var count = active.length;
+    bool free(int i) {
+      if (isTile[i] || i >= bottom) return false;
+      var touching = 0;
+      for (final j in _neighbors(i, rows, cols)) {
+        if (isTile[j]) touching++;
+      }
+      if (touching != 1) return false;
+      final r = i ~/ cols;
+      final c = i % cols;
+      for (var r0 = r - 1; r0 <= r; r0++) {
+        for (var c0 = c - 1; c0 <= c; c0++) {
+          if (r0 < 0 || c0 < 0 || r0 + 1 >= rows || c0 + 1 >= cols) continue;
+          var filled = 0;
+          for (final idx in [r0 * cols + c0, r0 * cols + c0 + 1, (r0 + 1) * cols + c0, (r0 + 1) * cols + c0 + 1]) {
+            if (idx == i || isTile[idx]) filled++;
+          }
+          if (filled == 4) return false;
+        }
+      }
+      return true;
+    }
+
+    var guard = 0;
+    while (count < target && active.isNotEmpty && guard++ < n * 50) {
+      final from = rng.chance(0.65) ? active.last : active[rng.nextInt(active.length)];
+      final options = <int>[];
+      final weights = <double>[];
+      for (final j in _neighbors(from, rows, cols)) {
+        if (!free(j)) continue;
+        options.add(j);
+        weights.add(j ~/ cols < from ~/ cols ? 3.0 : 1.7);
+      }
+      if (options.isEmpty) {
+        active.remove(from);
+        continue;
+      }
+      final next = options[rng.pickWeighted(weights)];
+      isTile[next] = true;
+      active.add(next);
+      count++;
+    }
+    return count.isEven && count >= target * 0.8 && _reachable(isTile, rows, cols);
   }
 
   List<TileSpec>? _assignSpecs(List<bool> walk, GenerationParams p, SeededRandom rng) {

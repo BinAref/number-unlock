@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import '../model/puzzle_layout.dart';
 import '../random/seeded_random.dart';
 import '../rules/rule_engine.dart';
+import '../solver/path_counter.dart';
 import '../solver/playouts.dart';
 import '../solver/puzzle_solver.dart';
 import '../solver/solver_context.dart';
@@ -19,7 +20,22 @@ class AnalyzerConfig {
     this.branchCheckBudget = 8000,
     this.randomRuns = 300,
     this.greedyRuns = 160,
+    this.countBudget = 120000,
   });
+
+  /// The settings every device uses to forge the endless levels (and the
+  /// tool uses for the bundled ones), so a level is identical everywhere.
+  static const AnalyzerConfig levels = AnalyzerConfig(
+    proofBudgets: <int, int>{2: 40000, 3: 250000, 4: 1000000, 5: 1500000},
+    branchBudget: 80000,
+    branchCheckBudget: 3000,
+    randomRuns: 160,
+    greedyRuns: 80,
+    countBudget: 150000,
+  );
+
+  /// Budget for counting winning orders (uniqueness).
+  final int countBudget;
 
   /// Light settings for on-device generation (challenges).
   static const AnalyzerConfig quick = AnalyzerConfig(
@@ -84,13 +100,19 @@ class DifficultyAnalyzer {
     required int rulesetVersion,
     required int seed,
     List<int>? witness,
+    int minCapacityFloor = 2,
   }) {
     final ctx = SolverContext(layout, rules);
     final solver = PuzzleSolver(ctx);
     final cap = config.capacity;
     var expansions = 0;
 
-    final mc = solver.minCapacity(maxCapacity: cap, budgets: config.proofBudgets, knownPath: witness);
+    final mc = solver.minCapacity(
+      maxCapacity: cap,
+      minCapacity: minCapacityFloor.clamp(2, cap),
+      budgets: config.proofBudgets,
+      knownPath: witness,
+    );
     expansions += mc.expansions;
     int minCap;
     bool proven;
@@ -127,6 +149,8 @@ class DifficultyAnalyzer {
     final gaps = replay.matchGaps;
     final avgGap = gaps.isEmpty ? 0.0 : gaps.fold<int>(0, (a, b) => a + b) / gaps.length;
 
+    final counted = PathCounter(ctx, capacity: cap, stateBudget: config.countBudget).countFromStart();
+    final paths = counted == null ? -1 : (counted > 1e9 ? 1000000000 : counted.round());
     final s = score(
       minCapacity: minCap,
       randomWin: randomWin,
@@ -135,6 +159,8 @@ class DifficultyAnalyzer {
       traps: branches.traps,
       tiles: layout.tileCount,
       longestRun: replay.longestPushRun,
+      avgRest: replay.avgRest,
+      paths: paths,
     );
     return AnalysisReport(
       profile: DifficultyProfile(
@@ -151,6 +177,8 @@ class DifficultyAnalyzer {
         avgMatchGap: avgGap,
         longestPushRun: replay.longestPushRun,
         tiles: layout.tileCount,
+        avgRest: replay.avgRest,
+        paths: paths,
       ),
       solution: path,
       expansions: expansions,
@@ -166,6 +194,8 @@ class DifficultyAnalyzer {
     required int traps,
     required int tiles,
     required int longestRun,
+    double avgRest = 0,
+    int paths = -1,
   }) {
     final capPart = switch (minCapacity) {
       <= 2 => 0.0,
@@ -174,13 +204,15 @@ class DifficultyAnalyzer {
       _ => 52.0,
     };
     final r = randomWin.clamp(0.0005, 1.0);
-    final randomPart = 18.0 * ((-math.log(r) / math.ln10) / 3.3).clamp(0.0, 1.0);
+    final randomPart = 18.0 * ((-detLog10(r)) / 3.3).clamp(0.0, 1.0);
     final greedyPart = 9.0 * (1 - greedyWin.clamp(0.0, 1.0));
     final deadPart = 9.0 * deadEnds.clamp(0.0, 1.0);
     final trapPart = math.min(3.0, traps * 0.25);
     final sizePart = 5.0 * (tiles / 48).clamp(0.0, 1.0);
     final planPart = math.min(4.0, longestRun * 0.5);
-    final total = capPart + randomPart + greedyPart + deadPart + trapPart + sizePart + planPart;
+    final busyPart = 5.0 * (avgRest / 4).clamp(0.0, 1.0);
+    final uniquePart = paths == 1 ? 4.0 : 0.0;
+    final total = capPart + randomPart + greedyPart + deadPart + trapPart + sizePart + planPart + busyPart + uniquePart;
     return total.round().clamp(0, 100);
   }
 

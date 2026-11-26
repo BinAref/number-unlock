@@ -24,6 +24,10 @@ void main(List<String> args) {
       hardenSteps: args.length >= 7 ? int.parse(args[6]) : 0,
       bottomGaps: args.length >= 8 ? int.parse(args[7]) : 0,
       spread: args.length >= 9 && args[8] == 'spread',
+      shape: args.length >= 10 ? args[9] : 'grid',
+      floorDepth: args.length >= 11 ? int.parse(args[10]) : 0,
+      unique: args.length >= 12 && args[11] == '1',
+      fill: args.length >= 13 ? double.parse(args[12]) : 0.55,
     ));
   } else {
     for (final g in const [(3, 3), (4, 4), (5, 5), (6, 6)]) {

@@ -42,7 +42,11 @@ class ReplayResult {
     required this.landings,
     required this.matchGaps,
     required this.longestPushRun,
+    this.avgRest = 0,
   });
+
+  /// Average tiles waiting in the tray after each pick.
+  final double avgRest;
 
   /// Every pick was legal.
   final bool valid;
@@ -163,12 +167,14 @@ class PuzzleSolver {
     var run = 0;
     var longest = 0;
     var valid = true;
+    var restSum = 0;
     for (var step = 0; step < path.length; step++) {
       final result = engine.extract(path[step]);
       if (!result.accepted) {
         valid = false;
         break;
       }
+      restSum += engine.tray.length;
       landings[result.slot]++;
       entered[result.cell] = step;
       if (result.matches.isEmpty) {
@@ -194,6 +200,7 @@ class PuzzleSolver {
       landings: landings,
       matchGaps: gaps,
       longestPushRun: longest,
+      avgRest: path.isEmpty ? 0 : restSum / path.length,
     );
   }
 }

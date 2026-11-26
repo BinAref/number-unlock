@@ -34,6 +34,11 @@ class GenerationParams {
     this.hardenSteps = 0,
     this.bottomGaps = 0,
     this.spread = false,
+    this.shape = 'grid',
+    this.fill = 0.55,
+    this.entrances = 2,
+    this.floorDepth = 0,
+    this.unique = false,
   });
 
   factory GenerationParams.fromJson(Map<String, Object?> json) => GenerationParams(
@@ -53,6 +58,11 @@ class GenerationParams {
         hardenSteps: readInt(json['harden']),
         bottomGaps: readInt(json['gaps']),
         spread: readBool(json['spread']),
+        shape: readString(json['shape'], 'grid'),
+        fill: readDouble(json['fill'], 0.55),
+        entrances: readInt(json['entrances'], 2),
+        floorDepth: readInt(json['floor']),
+        unique: readBool(json['unique']),
       );
 
   final int rows;
@@ -96,6 +106,23 @@ class GenerationParams {
   /// frontiers — the source of genuinely hard puzzles.
   final bool spread;
 
+  /// `grid` (full board) or `corridors`: a tree of one-tile-wide passages
+  /// inside the frame, so even a 10 × 10 board keeps a narrow, tense front.
+  final String shape;
+
+  /// Share of the cells that become tiles in a corridor board.
+  final double fill;
+
+  /// Corridor entrances in the bottom row.
+  final int entrances;
+
+  /// Once reached, the hidden solution never keeps fewer tiles waiting until
+  /// the final unwinding — the slots stay busy for the whole level.
+  final int floorDepth;
+
+  /// Drive the number of winning orders down to exactly one.
+  final bool unique;
+
   int get targetCapacity => targetDepth + 1;
 
   GenerationParams copyWith({int? rows, int? cols, int? targetDepth, int? hardenSteps, int? minScore, int? maxScore}) =>
@@ -116,6 +143,11 @@ class GenerationParams {
         hardenSteps: hardenSteps ?? this.hardenSteps,
         bottomGaps: bottomGaps,
         spread: spread,
+        shape: shape,
+        fill: fill,
+        entrances: entrances,
+        floorDepth: floorDepth,
+        unique: unique,
       );
 
   Map<String, Object?> toJson() => {

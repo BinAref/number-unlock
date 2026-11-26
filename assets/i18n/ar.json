@@ -211,5 +211,23 @@
   "rule.triple_sum10_distinct.title": "ثلاثية العشرة",
   "rule.triple_sum10_distinct.body": "ثلاثة أرقام متجاورة بثلاثة ألوان مختلفة مجموعها 10 تختفي.",
 
+  "home.stage": "المرحلة {n}",
+  "levels.forging": "نصوغ المرحلة {n}…",
+  "profile.stage": "المرحلة التي وصلتها",
+  "profile.stars": "النجوم المجموعة",
+  "profile.coins": "العملات",
+  "profile.best": "أعلى نقاط في التحدي",
+  "profile.bestTier": "أعلى صعوبة في التحدي",
+  "profile.solved": "التحديات المحلولة",
+  "profile.edit": "تعديل الاسم والشعار",
+  "challenge.score": "النقاط {n}",
+  "challenge.points": "+{n} نقطة",
+  "challenge.accuracy": "الدقة {p}%",
+  "challenge.runTotal": "مجموع المحاولة: {n}",
+  "challenge.best": "الأفضل: {n}",
+  "challenge.newBest": "رقم قياسي جديد!",
+  "challenge.counting": "نحسب نقاطك…",
+  "challenge.scoring": "يُقارَن كل سحب بالحل المثالي: السحب المثالي يأخذ النقاط كاملة، وغيره أقل، واللغز الخاسر نقاطه صفر.",
+
   "toast.coinsAdded": "+{n} عملة"
 }

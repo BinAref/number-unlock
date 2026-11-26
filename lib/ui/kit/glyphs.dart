@@ -33,6 +33,7 @@ enum Glyph {
   restart,
   check,
   film,
+  trophy,
 }
 
 class GlyphPainter extends CustomPainter {
@@ -164,6 +165,20 @@ class GlyphPainter extends CustomPainter {
         canvas.drawPath(Path()..moveTo(p(0.64, 0.12).dx, p(0.64, 0.12).dy)..lineTo(p(0.78, 0.3).dx, p(0.78, 0.3).dy)..lineTo(p(0.56, 0.34).dx, p(0.56, 0.34).dy), stroke);
       case Glyph.check:
         canvas.drawPath(Path()..moveTo(p(0.2, 0.52).dx, p(0.2, 0.52).dy)..lineTo(p(0.42, 0.74).dx, p(0.42, 0.74).dy)..lineTo(p(0.8, 0.28).dx, p(0.8, 0.28).dy), stroke..strokeWidth = w * 0.14);
+      case Glyph.trophy:
+        canvas.drawPath(
+          Path()
+            ..moveTo(p(0.26, 0.16).dx, p(0.26, 0.16).dy)
+            ..lineTo(p(0.74, 0.16).dx, p(0.74, 0.16).dy)
+            ..lineTo(p(0.68, 0.48).dx, p(0.68, 0.48).dy)
+            ..quadraticBezierTo(p(0.5, 0.66).dx, p(0.5, 0.66).dy, p(0.32, 0.48).dx, p(0.32, 0.48).dy)
+            ..close(),
+          fill,
+        );
+        canvas.drawArc(Rect.fromPoints(p(0.1, 0.2), p(0.34, 0.44)), math.pi / 2, math.pi, false, stroke);
+        canvas.drawArc(Rect.fromPoints(p(0.66, 0.2), p(0.9, 0.44)), -math.pi / 2, math.pi, false, stroke);
+        canvas.drawLine(p(0.5, 0.62), p(0.5, 0.78), stroke);
+        canvas.drawLine(p(0.32, 0.84), p(0.68, 0.84), stroke);
       case Glyph.film:
         canvas.drawRRect(RRect.fromRectAndRadius(Rect.fromPoints(p(0.12, 0.22), p(0.88, 0.78)), Radius.circular(w * 0.1)), stroke);
         canvas.drawPath(Path()..moveTo(p(0.42, 0.36).dx, p(0.42, 0.36).dy)..lineTo(p(0.64, 0.5).dx, p(0.64, 0.5).dy)..lineTo(p(0.42, 0.64).dx, p(0.42, 0.64).dy)..close(), fill);

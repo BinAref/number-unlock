@@ -12,6 +12,7 @@ import '../../ui/kit/paint_kit.dart';
 import '../../ui/kit/widgets.dart';
 import '../../ui/kit/world_objects.dart';
 import '../common/navigation.dart';
+import '../settings/settings_screen.dart';
 
 /// Emblems a player can pick as their portrait.
 const List<Glyph> kEmblems = [Glyph.sparkle, Glyph.lock, Glyph.hint, Glyph.gear, Glyph.music, Glyph.globe, Glyph.shield, Glyph.theme];
@@ -109,18 +110,20 @@ class _TopArch extends StatelessWidget {
                 final p = s.player;
                 final lvl = p.level;
                 return Row(children: [
-                  Pressable(onTap: () => openSettings(context), child: _Portrait(emblem: kEmblems[p.profile.avatar % kEmblems.length])),
+                  Pressable(onTap: () => showProfile(context), child: _Portrait(emblem: kEmblems[p.profile.avatar % kEmblems.length], stage: p.progress.highestUnlocked)),
                   const SizedBox(width: 10),
                   Expanded(
                     child: Column(crossAxisAlignment: CrossAxisAlignment.start, mainAxisAlignment: MainAxisAlignment.center, children: [
                       Text(p.profile.name ?? s.i18n.t('profile.defaultName'), style: UiText.style(context, size: 17), overflow: TextOverflow.ellipsis),
                       const SizedBox(height: 3),
                       Row(children: [
-                        Text(s.i18n.t('home.playerLevel', {'n': lvl.level}), style: UiText.style(context, size: 13, color: t.color('text.accent'))),
+                        Text(s.i18n.t('home.stage', {'n': p.progress.highestUnlocked}), style: UiText.style(context, size: 13, color: t.color('text.accent'))),
+                        const SizedBox(width: 10),
+                        GlyphIcon(Glyph.trophy, size: 16, color: t.color('gold.light')),
+                        const SizedBox(width: 4),
+                        Text('${p.bestScore}', style: UiText.numbers(context, size: 13)),
                         const SizedBox(width: 8),
                         Expanded(child: _ProgressGroove(value: lvl.progress)),
-                        const SizedBox(width: 6),
-                        Text(s.i18n.t('home.progress', {'p': (lvl.progress * 100).round()}), style: UiText.numbers(context, size: 12)),
                       ]),
                     ]),
                   ),
@@ -137,9 +140,12 @@ class _TopArch extends StatelessWidget {
 }
 
 class _Portrait extends StatelessWidget {
-  const _Portrait({required this.emblem});
+  const _Portrait({required this.emblem, this.stage = 0});
 
   final Glyph emblem;
+
+  /// The stage the player has reached, shown on the portrait.
+  final int stage;
 
   @override
   Widget build(BuildContext context) {
@@ -147,7 +153,19 @@ class _Portrait extends StatelessWidget {
     return SizedBox(
       width: 56,
       height: 56,
-      child: CustomPaint(painter: _PortraitPainter(t), child: Center(child: GlyphIcon(emblem, size: 26, color: t.color('gold.light')))),
+      child: Stack(clipBehavior: Clip.none, children: [
+        Positioned.fill(child: CustomPaint(painter: _PortraitPainter(t), child: Center(child: GlyphIcon(emblem, size: 26, color: t.color('gold.light'))))),
+        if (stage > 0)
+          PositionedDirectional(
+            end: -8,
+            bottom: -4,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(color: t.color('gold.base'), borderRadius: BorderRadius.circular(10), border: Border.all(color: t.color('gold.deep'), width: 1.5)),
+              child: Text('$stage', style: UiText.numbers(context, size: 11, color: t.color('text.onGold'), shadow: false)),
+            ),
+          ),
+      ]),
     );
   }
 }

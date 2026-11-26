@@ -10,8 +10,11 @@ import '../util/json_read.dart';
 /// One challenge attempt ("run"): tiers climb as puzzles are solved and the
 /// run ends when a puzzle is lost.
 class ChallengeRun {
-  ChallengeRun({required this.tier, required this.solved, required this.seed, List<int>? recent})
+  ChallengeRun({required this.tier, required this.solved, required this.seed, List<int>? recent, this.score = 0})
       : recent = recent ?? <int>[];
+
+  /// Points earned in this run so far.
+  int score;
 
   factory ChallengeRun.fresh(int seed) => ChallengeRun(tier: 1, solved: 0, seed: seed);
 
@@ -20,6 +23,7 @@ class ChallengeRun {
         solved: readInt(json['solved']),
         seed: readInt(json['seed']),
         recent: readIntList(json['recent']),
+        score: readInt(json['score']),
       );
 
   /// Current difficulty step (1 = gentlest).
@@ -51,7 +55,7 @@ class ChallengeRun {
     }
   }
 
-  Map<String, Object?> toJson() => {'tier': tier, 'solved': solved, 'seed': seed, 'recent': recent};
+  Map<String, Object?> toJson() => {'tier': tier, 'solved': solved, 'seed': seed, 'recent': recent, 'score': score};
 }
 
 /// Builds challenge puzzles on demand: a fresh seed every time, the same

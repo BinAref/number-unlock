@@ -319,7 +319,10 @@ class _Header extends StatelessWidget {
                   Expanded(
                     child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
                       Text(label, style: UiText.style(context, size: 19), overflow: TextOverflow.ellipsis),
-                      if (tier != null) Text(i18n.t('difficulty.$tier'), style: UiText.style(context, size: 12, color: s.theme.tokens.color('text.accent'))),
+                      if (game.run != null)
+                        Text(i18n.t('challenge.score', {'n': game.run!.score}), style: UiText.numbers(context, size: 12, color: s.theme.tokens.color('text.accent')))
+                      else if (tier != null)
+                        Text(i18n.t('difficulty.$tier'), style: UiText.style(context, size: 12, color: s.theme.tokens.color('text.accent'))),
                     ]),
                   ),
                   CoinCounter(onAdd: () => openShop(context)),

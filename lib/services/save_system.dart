@@ -103,8 +103,9 @@ class SaveSystem {
 
   Future<void> saveWallet(Wallet w) => _write(walletKey, w.toJson());
 
-  Future<int> loadXp() async => readInt((await _read(playerKey))?['xp']);
-  Future<void> saveXp(int xp) => _write(playerKey, {'xp': xp});
+  /// XP and records: `{"xp":640,"best":1280,"bestTier":7,"solved":23}`.
+  Future<Map<String, Object?>> loadPlayer() async => await _read(playerKey) ?? const <String, Object?>{};
+  Future<void> savePlayer(Map<String, Object?> json) => _write(playerKey, json);
 
   /// The unfinished attempt of a mode (`levels` or `challenge`).
   Future<GameSnapshot?> loadAttempt(String mode) async {

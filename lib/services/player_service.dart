@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import '../core/economy/economy_rules.dart';
 import '../core/economy/wallet.dart';
 import '../core/levels/level_progress.dart';
+import '../core/util/json_read.dart';
 import 'save_system.dart';
 
 /// What a win paid out (for the celebration screen).
@@ -18,7 +19,11 @@ class WinReward {
 /// The player's state — profile, settings, coins, XP and level progress —
 /// as one observable object. Every change is saved immediately.
 class PlayerService extends ChangeNotifier {
-  PlayerService._(this._save, this.economy, this.profile, this.settings, this.progress, this._wallet, this._xp);
+  PlayerService._(this._save, this.economy, this.profile, this.settings, this.progress, this._wallet, Map<String, Object?> stats)
+      : _xp = readInt(stats['xp']),
+        bestScore = readInt(stats['best']),
+        bestTier = readInt(stats['bestTier']),
+        challengesSolved = readInt(stats['solved']);
 
   static Future<PlayerService> load(SaveSystem save, EconomyRules economy) async {
     final wallet = await save.loadWallet() ?? Wallet(coins: economy.startingCoins);
@@ -29,7 +34,7 @@ class PlayerService extends ChangeNotifier {
       await save.loadSettings(),
       await save.loadProgress(),
       wallet,
-      await save.loadXp(),
+      await save.loadPlayer(),
     );
   }
 
@@ -40,6 +45,13 @@ class PlayerService extends ChangeNotifier {
   final LevelProgress progress;
   final Wallet _wallet;
   int _xp;
+
+  /// Highest challenge run score ever reached.
+  int bestScore;
+
+  /// Highest challenge difficulty ever reached.
+  int bestTier;
+  int challengesSolved;
 
   int get coins => _wallet.coins;
   int get xp => _xp;
@@ -74,21 +86,34 @@ class PlayerService extends ChangeNotifier {
     if (coins > 0) _wallet.credit(coins, opId: 'win:level-$level:${completion.previousStars}->$stars');
     _save.saveProgress(progress);
     _save.saveWallet(_wallet);
-    _save.saveXp(_xp);
+    _savePlayer();
     notifyListeners();
     return WinReward(coins: coins, xp: xpGain, stars: stars, levelUp: this.level.level > before);
   }
 
   WinReward recordChallengeWin({required int tier, required int seed}) {
     final before = level.level;
+    challengesSolved++;
     final coins = economy.challengeCoins(tier);
     final xpGain = economy.challengeXpFor(tier);
     _xp += xpGain;
     _wallet.credit(coins, opId: 'win:challenge-$tier-$seed');
     _save.saveWallet(_wallet);
-    _save.saveXp(_xp);
+    _savePlayer();
     notifyListeners();
     return WinReward(coins: coins, xp: xpGain, stars: 0, levelUp: level.level > before);
+  }
+
+  void _savePlayer() => _save.savePlayer({'xp': _xp, 'best': bestScore, 'bestTier': bestTier, 'solved': challengesSolved});
+
+  /// Records a challenge run total; true when it is a new personal best.
+  bool recordRunScore(int score, int tier) {
+    final isNew = score > bestScore;
+    if (isNew) bestScore = score;
+    if (tier > bestTier) bestTier = tier;
+    _savePlayer();
+    notifyListeners();
+    return isNew;
   }
 
   void updateProfile({String? name, int? avatar}) {

@@ -206,5 +206,23 @@
   "rule.triple_sum10_distinct.title": "Onun üçlüsü",
   "rule.triple_sum10_distinct.body": "Üç farklı renkte, toplamı 10 olan üç komşu kaybolur.",
 
+  "home.stage": "Bölüm {n}",
+  "levels.forging": "{n}. bölüm dövülüyor…",
+  "profile.stage": "Ulaşılan bölüm",
+  "profile.stars": "Toplanan yıldızlar",
+  "profile.coins": "Altınlar",
+  "profile.best": "En yüksek meydan okuma puanı",
+  "profile.bestTier": "En yüksek meydan okuma zorluğu",
+  "profile.solved": "Çözülen meydan okumalar",
+  "profile.edit": "Adı ve amblemi düzenle",
+  "challenge.score": "Puan {n}",
+  "challenge.points": "+{n} puan",
+  "challenge.accuracy": "İsabet %{p}",
+  "challenge.runTotal": "Deneme toplamı: {n}",
+  "challenge.best": "En iyi: {n}",
+  "challenge.newBest": "Yeni rekor!",
+  "challenge.counting": "Puanların hesaplanıyor…",
+  "challenge.scoring": "Her hamle kusursuz yolla karşılaştırılır: kusursuz hamleler tam puan alır, diğerleri daha az, kaybedilen bulmaca sıfır puan.",
+
   "toast.coinsAdded": "+{n} altın"
 }

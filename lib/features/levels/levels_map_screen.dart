@@ -68,7 +68,7 @@ class _LevelsMapScreenState extends State<LevelsMapScreen> {
   Widget build(BuildContext context) {
     final s = Services.of(context);
     final size = MediaQuery.sizeOf(context);
-    final total = s.levels.total;
+    final total = s.player.progress.highestUnlocked + s.levels.lookahead;
     final geo = _geo ??= MapGeometry(width: math.min(size.width, 560), total: total, spacing: s.config.mapSpacing);
     final progress = s.player.progress;
     if (_scroll == null) {

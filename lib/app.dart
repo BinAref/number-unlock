@@ -35,6 +35,7 @@ class _UnlockNumbersAppState extends State<UnlockNumbersApp> with WidgetsBinding
     installMockAds(s, _navigator);
     s.theme.addListener(_themeChanged);
     s.audio.music(s.theme.activeId);
+    s.levels.ensureAhead(s.player.progress.highestUnlocked);
   }
 
   @override
